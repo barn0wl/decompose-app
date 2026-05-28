@@ -4,7 +4,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["ES2022"],
-    "rootDir": "./src",
+    "types": ["node"],
     "outDir": "./dist",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -14,6 +14,6 @@
     "declaration": false,
     "noEmitOnError": false
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "prisma.config.ts"],
   "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
 }

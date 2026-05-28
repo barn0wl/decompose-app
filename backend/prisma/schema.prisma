@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"  // switched from sqlite — enums require postgres
+  url      = env("DATABASE_URL")
+}
+
+model Stop {
+  id        String   @id @default(uuid())
+  name      String
+  commune   String
+  latitude  Float
+  longitude Float
+  type      StopType
+  zoneId    String?
+  zone      Zone?    @relation(fields: [zoneId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  connectionsFrom Connection[] @relation("FromStop")
+  connectionsTo   Connection[] @relation("ToStop")
+}
+
+enum StopType {
+  taxi_stop
+  gbaka_station
+  landmark
+  zone_boundary
+}
+
+model Zone {
+  id          String   @id @default(uuid())
+  name        String
+  commune     String
+  description String?
+  zoneType    ZoneType
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stops           Stop[]
+  connectionsFrom Connection[] @relation("FromZone")
+  connectionsTo   Connection[] @relation("ToZone")
+}
+
+enum ZoneType {
+  taxi_commune_zone
+  gbaka_corridor
+}
+
+model Connection {
+  id          String  @id @default(uuid())
+
+  // Origin — either a specific stop or a zone (one must be set)
+  fromStopId  String?
+  fromStop    Stop?   @relation("FromStop", fields: [fromStopId], references: [id])
+  fromZoneId  String?
+  fromZone    Zone?   @relation("FromZone", fields: [fromZoneId], references: [id])
+
+  // Destination — either a specific stop or a zone (one must be set)
+  toStopId    String?
+  toStop      Stop?   @relation("ToStop", fields: [toStopId], references: [id])
+  toZoneId    String?
+  toZone      Zone?   @relation("ToZone", fields: [toZoneId], references: [id])
+
+  transportType    TransportType
+  basePrice        Int
+  pricePerZone     Int?          // post-MVP: graduated pricing
+  durationMinutes  Int
+  routeDescription String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+}
+
+enum TransportType {
+  communal_taxi
+  gbaka
+  walking
+}
