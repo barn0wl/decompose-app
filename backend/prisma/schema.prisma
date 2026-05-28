@@ -1,10 +1,10 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../generated/prisma"
 }
 
 datasource db {
-  provider = "postgresql"  // switched from sqlite — enums require postgres
-  url      = env("DATABASE_URL")
+  provider = "postgresql"
 }
 
 model Stop {
@@ -50,27 +50,27 @@ enum ZoneType {
 }
 
 model Connection {
-  id          String  @id @default(uuid())
+  id String @id @default(uuid())
 
   // Origin — either a specific stop or a zone (one must be set)
-  fromStopId  String?
-  fromStop    Stop?   @relation("FromStop", fields: [fromStopId], references: [id])
-  fromZoneId  String?
-  fromZone    Zone?   @relation("FromZone", fields: [fromZoneId], references: [id])
+  fromStopId String?
+  fromStop   Stop?  @relation("FromStop", fields: [fromStopId], references: [id])
+  fromZoneId String?
+  fromZone   Zone?  @relation("FromZone", fields: [fromZoneId], references: [id])
 
   // Destination — either a specific stop or a zone (one must be set)
-  toStopId    String?
-  toStop      Stop?   @relation("ToStop", fields: [toStopId], references: [id])
-  toZoneId    String?
-  toZone      Zone?   @relation("ToZone", fields: [toZoneId], references: [id])
+  toStopId String?
+  toStop   Stop?  @relation("ToStop", fields: [toStopId], references: [id])
+  toZoneId String?
+  toZone   Zone?  @relation("ToZone", fields: [toZoneId], references: [id])
 
   transportType    TransportType
   basePrice        Int
-  pricePerZone     Int?          // post-MVP: graduated pricing
+  pricePerZone     Int?         // post-MVP: graduated pricing
   durationMinutes  Int
   routeDescription String?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 }
 
 enum TransportType {

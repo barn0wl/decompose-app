@@ -1,4 +1,4 @@
-import { TransportType } from '@prisma/client';
+import { TransportType } from '../../generated/prisma/index.js';
 import prisma from '../lib/prisma.js';
 
 export interface RouteStep {
