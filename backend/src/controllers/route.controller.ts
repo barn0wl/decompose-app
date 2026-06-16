@@ -54,8 +54,8 @@ export async function searchStops(req: Request, res: Response) {
     const stops = await prisma.stop.findMany({
       where: {
         OR: [
-          { name: { contains: q } },
-          { commune: { contains: q } }
+          { name: { contains: q, mode: 'insensitive' } },
+          { commune: { contains: q, mode: 'insensitive' } }
         ]
       },
       take: 10
