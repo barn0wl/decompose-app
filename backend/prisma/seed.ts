@@ -1,4 +1,4 @@
-import { PrismaClient, StopType, TransportType } from '../generated/prisma/index.js';
+import { PrismaClient, StopType, TransportType } from '../generated/prisma/index';
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const adapter = new PrismaPg({

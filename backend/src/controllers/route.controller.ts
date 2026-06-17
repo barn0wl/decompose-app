@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
-import { routingService } from '../services/routing.service.js';
-import { calculateRouteSchema } from '../validators/route.validator.js';
-import prisma from '../lib/prisma.js';
+import { routingService } from '../services/routing.service';
+import { calculateRouteSchema } from '../validators/route.validator';
+import prisma from '../lib/prisma';
 
 export async function calculateRoute(req: Request, res: Response) {
   try {
