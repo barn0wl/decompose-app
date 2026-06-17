@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { routingService } from '../services/routing.service';
 import { calculateRouteSchema } from '../validators/route.validator';
+import { ZodError } from 'zod';
 import prisma from '../lib/prisma';
 
 export async function calculateRoute(req: Request, res: Response) {
@@ -35,9 +36,17 @@ export async function calculateRoute(req: Request, res: Response) {
     });
     
   } catch (error: any) {
-    if (error.name === 'ZodError') {
-      return res.status(400).json({ error: error.errors });
+    // Check if it's a ZodError
+    if (error instanceof ZodError) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: error.issues.map((issue) => ({
+          field: issue.path.join('.'),
+          message: issue.message
+        }))
+      });
     }
+
     console.error('Route calculation error:', error);
     res.status(500).json({ error: 'Failed to calculate route' });
   }
