@@ -8,27 +8,29 @@ import { Stop } from '../types';
 
 interface Props {
   label: string;
-  onStopSelected: (stop: Stop) => void;
+  onStopSelected: (stop: Stop | null) => void;
   selectedStop: Stop | null;
+  zIndex?: number; // controls stacking order relative to sibling inputs
 }
 
-export default function StopSearchInput({ label, onStopSelected, selectedStop }: Props) {
+export default function StopSearchInput({ label, onStopSelected, selectedStop, zIndex = 1 }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Stop[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
 
   const debouncedQuery = useDebounce(query, 400);
 
-  // Search whenever the debounced query changes
   useEffect(() => {
-    if (debouncedQuery.length < 2) {
+    // Only search if the input is actually focused — prevents ghost searches
+    if (!isFocused || debouncedQuery.length < 2) {
       setResults([]);
       setIsOpen(false);
       return;
     }
 
-    let cancelled = false; // prevents stale responses from overwriting newer ones
+    let cancelled = false;
 
     const fetchStops = async () => {
       setIsLoading(true);
@@ -38,7 +40,7 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop }:
           setResults(stops);
           setIsOpen(stops.length > 0);
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) setResults([]);
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -47,29 +49,41 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop }:
 
     fetchStops();
     return () => { cancelled = true; };
-  }, [debouncedQuery]);
+  }, [debouncedQuery, isFocused]);
 
   const handleSelect = useCallback((stop: Stop) => {
     onStopSelected(stop);
     setQuery(stop.name);
     setResults([]);
     setIsOpen(false);
+    setIsFocused(false);
   }, [onStopSelected]);
 
   const handleChangeText = useCallback((text: string) => {
     setQuery(text);
-    // If user edits after selecting, clear the selection
-    if (selectedStop && text !== selectedStop.name) {
-      onStopSelected(null as unknown as Stop); // signal parent to clear
+    if (selectedStop) {
+      onStopSelected(null);
     }
   }, [selectedStop, onStopSelected]);
 
+  const handleFocus = useCallback(() => setIsFocused(true), []);
+
+  const handleBlur = useCallback(() => {
+    // Small delay so tapping a suggestion registers before the list closes
+    setTimeout(() => {
+      setIsOpen(false);
+      setIsFocused(false);
+    }, 150);
+  }, []);
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { zIndex }]}>
       <TextInput
         label={label}
         value={query}
         onChangeText={handleChangeText}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
         mode="outlined"
         right={isLoading ? <TextInput.Icon icon={() => <ActivityIndicator size={16} />} /> : null}
         autoCorrect={false}
@@ -82,6 +96,8 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop }:
             data={results}
             keyExtractor={item => item.id}
             keyboardShouldPersistTaps="handled"
+            scrollEnabled={true}
+            nestedScrollEnabled={true}
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={styles.suggestion}
@@ -101,23 +117,22 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop }:
 const styles = StyleSheet.create({
   container: {
     position: 'relative',
-    zIndex: 1, // ensures dropdown renders above sibling elements
     marginBottom: 12,
   },
   dropdown: {
     position: 'absolute',
-    top: 58, // sits just below the TextInput
+    top: 58,
     left: 0,
     right: 0,
     backgroundColor: '#fff',
     borderRadius: 4,
-    elevation: 4, // Android shadow
-    shadowColor: '#000', // iOS shadow
+    elevation: 4,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
     maxHeight: 200,
-    zIndex: 2,
+    zIndex: 999,
   },
   suggestion: {
     paddingVertical: 10,

@@ -11,7 +11,7 @@ export type RootStackParamList = {
     routes: CalculatedRoute[];
   };
   RouteDetail: {
-    route: CalculatedRoute;
+    selectedRoute: CalculatedRoute;
     originName: string;
     destinationName: string;
   };
