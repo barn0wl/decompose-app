@@ -8,6 +8,7 @@ export type RootStackParamList = {
     destinationId: string;
     destinationName: string;
     optimizeBy: 'price' | 'time' | 'balanced';
+    routes: CalculatedRoute[];
   };
   RouteDetail: {
     route: CalculatedRoute;
@@ -16,7 +17,7 @@ export type RootStackParamList = {
   };
 };
 
-// ─── API types (mirror backend) ──────────────────────────────────────────
+// ─── API types (mirror your backend) ──────────────────────────────────────────
 
 export interface Stop {
   id: string;
