@@ -35,18 +35,13 @@ model Zone {
   name        String
   commune     String
   description String?
-  zoneType    ZoneType
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  stops           Stop[]
+  
+  stops       Stop[]
   connectionsFrom Connection[] @relation("FromZone")
   connectionsTo   Connection[] @relation("ToZone")
-}
-
-enum ZoneType {
-  taxi_commune_zone
-  gbaka_corridor
 }
 
 model Connection {

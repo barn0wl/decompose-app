@@ -1,4 +1,5 @@
-import { TransportType } from '../../generated/prisma/index';
+import { TransportType } from '../../generated/prisma';
+import { buildGraph, GraphEdge, RouteGraph } from './graph.builder';
 import prisma from '../lib/prisma';
 
 export interface RouteStep {
@@ -8,6 +9,8 @@ export interface RouteStep {
   price: number;
   duration: number;
   instructions: string;
+  fromZone?: string | null;
+  toZone?: string | null;
 }
 
 export interface CalculatedRoute {
@@ -17,17 +20,6 @@ export interface CalculatedRoute {
   steps: RouteStep[];
 }
 
-interface GraphEdge {
-  to: string;
-  price: number;
-  duration: number;
-  transportType: TransportType;
-  fromName: string;
-  toName: string;
-  instructions: string;
-}
-
-// Tracks both the previous node and the edge used to get there
 interface PathEntry {
   prevNode: string | null;
   edge: GraphEdge | null;
@@ -36,18 +28,39 @@ interface PathEntry {
 type WeightKey = 'price' | 'duration' | 'balanced';
 
 class RoutingService {
+  private graphCache: RouteGraph | null = null;
+  private lastBuildTime: number = 0;
+
   async calculateRoute(
     originStopId: string,
     destinationStopId: string,
     optimizeBy: 'price' | 'time' | 'balanced' = 'price'
   ): Promise<CalculatedRoute[]> {
-    const graph = await this.buildGraph();
+    // Build or get cached graph
+    const graph = await this.getGraph();
+
+    // Add origin and destination nodes to the graph if they don't exist
+    if (!graph.edges.has(originStopId)) {
+      graph.edges.set(originStopId, []);
+    }
+    if (!graph.nodeNames.has(originStopId)) {
+      const stop = await prisma.stop.findUnique({
+        where: { id: originStopId },
+        select: { name: true }
+      });
+      if (stop) graph.nodeNames.set(originStopId, stop.name);
+    }
 
     const weightKey: WeightKey =
       optimizeBy === 'price' ? 'price' :
-      optimizeBy === 'time'  ? 'duration' : 'balanced';
+      optimizeBy === 'time' ? 'duration' : 'balanced';
 
-    const result = this.dijkstra(graph, originStopId, destinationStopId, weightKey);
+    const result = this.dijkstra(
+      graph.edges,
+      originStopId,
+      destinationStopId,
+      weightKey
+    );
 
     if (!result) {
       throw new Error('No route found between these stops');
@@ -57,48 +70,14 @@ class RoutingService {
     return [route];
   }
 
-  private async buildGraph(): Promise<Map<string, GraphEdge[]>> {
-    const graph = new Map<string, GraphEdge[]>();
-
-    const connections = await prisma.connection.findMany({
-      include: { fromStop: true, toStop: true }
-    });
-
-    for (const conn of connections) {
-      // For MVP: only handle stop-to-stop connections
-      // Zone-based connections will be expanded post-MVP
-      if (!conn.fromStopId || !conn.toStopId || !conn.fromStop || !conn.toStop) continue;
-
-      const edge: GraphEdge = {
-        to: conn.toStopId,
-        price: conn.basePrice,
-        duration: conn.durationMinutes,
-        transportType: conn.transportType,
-        fromName: conn.fromStop.name,
-        toName: conn.toStop.name,
-        instructions: conn.routeDescription ?? this.generateInstructions(
-          conn.transportType,
-          conn.toStop.name,
-          conn.basePrice,
-          conn.durationMinutes
-        )
-      };
-
-      if (!graph.has(conn.fromStopId)) graph.set(conn.fromStopId, []);
-      graph.get(conn.fromStopId)!.push(edge);
+  private async getGraph(): Promise<RouteGraph> {
+    // Simple cache - rebuild if more than 5 minutes old
+    const now = Date.now();
+    if (!this.graphCache || (now - this.lastBuildTime) > 300000) {
+      this.graphCache = await buildGraph();
+      this.lastBuildTime = now;
     }
-
-    return graph;
-  }
-
-  private generateInstructions(
-    type: TransportType,
-    toName: string,
-    price: number,
-    duration: number
-  ): string {
-    const verb = type === 'walking' ? 'Walk to' : `Take ${type.replace('_', ' ')} to`;
-    return `${verb} ${toName} (${price} CFA, ~${duration} min)`;
+    return this.graphCache;
   }
 
   private dijkstra(
@@ -108,16 +87,17 @@ class RoutingService {
     weightKey: WeightKey
   ): { steps: GraphEdge[] } | null {
     const distances = new Map<string, number>();
-    const pathMap = new Map<string, PathEntry>(); // node -> { prevNode, edge used }
+    const pathMap = new Map<string, PathEntry>();
     const unvisited = new Set<string>();
 
+    // Initialize distances
     for (const node of graph.keys()) {
       distances.set(node, Infinity);
       pathMap.set(node, { prevNode: null, edge: null });
       unvisited.add(node);
     }
 
-    // Ensure start and end are in the maps even if they have no outgoing edges
+    // Ensure start and end are in the graph
     if (!distances.has(start)) distances.set(start, Infinity);
     if (!distances.has(end)) distances.set(end, Infinity);
     unvisited.add(start);
@@ -130,15 +110,19 @@ class RoutingService {
       let smallest = Infinity;
       for (const node of unvisited) {
         const d = distances.get(node) ?? Infinity;
-        if (d < smallest) { smallest = d; current = node; }
+        if (d < smallest) {
+          smallest = d;
+          current = node;
+        }
       }
 
       if (!current || current === end) break;
-      if (smallest === Infinity) break; // remaining nodes are unreachable
+      if (smallest === Infinity) break;
 
       unvisited.delete(current);
 
-      for (const edge of graph.get(current) ?? []) {
+      const edges = graph.get(current) ?? [];
+      for (const edge of edges) {
         if (!unvisited.has(edge.to)) continue;
         const alt = (distances.get(current) ?? Infinity) + this.getWeight(edge, weightKey);
         if (alt < (distances.get(edge.to) ?? Infinity)) {
@@ -150,7 +134,7 @@ class RoutingService {
 
     if ((distances.get(end) ?? Infinity) === Infinity) return null;
 
-    // Reconstruct steps by walking back through pathMap
+    // Reconstruct steps
     const steps: GraphEdge[] = [];
     let cursor: string | null = end;
     while (cursor && cursor !== start) {
@@ -166,7 +150,7 @@ class RoutingService {
   private getWeight(edge: GraphEdge, weightKey: WeightKey): number {
     if (weightKey === 'price') return edge.price;
     if (weightKey === 'duration') return edge.duration;
-    return (edge.price / 10) + edge.duration; // balanced
+    return (edge.price / 10) + edge.duration;
   }
 
   private formatRoute(steps: GraphEdge[]): CalculatedRoute {
@@ -183,7 +167,9 @@ class RoutingService {
         to: s.toName,
         price: s.price,
         duration: s.duration,
-        instructions: s.instructions
+        instructions: s.instructions,
+        fromZone: s.fromZoneId || null,
+        toZone: s.toZoneId || null
       }))
     };
   }

@@ -8,35 +8,52 @@ export async function calculateRoute(req: Request, res: Response) {
   try {
     // Validate input
     const validated = calculateRouteSchema.parse(req.body);
-    
-    // Get stop details for response (optional)
+
+    // Get stop details for response
     const originStop = await prisma.stop.findUnique({
-      where: { id: validated.originStopId }
+      where: { id: validated.originStopId },
+      include: { zone: true }
     });
     const destinationStop = await prisma.stop.findUnique({
-      where: { id: validated.destinationStopId }
+      where: { id: validated.destinationStopId },
+      include: { zone: true }
     });
-    
+
     if (!originStop || !destinationStop) {
       return res.status(404).json({ error: 'Stop not found' });
     }
-    
+
     // Calculate route
     const routes = await routingService.calculateRoute(
       validated.originStopId,
       validated.destinationStopId,
       validated.optimizeBy
     );
-    
+
     res.json({
-      origin: { id: originStop.id, name: originStop.name, commune: originStop.commune },
-      destination: { id: destinationStop.id, name: destinationStop.name, commune: destinationStop.commune },
+      origin: {
+        id: originStop.id,
+        name: originStop.name,
+        commune: originStop.commune,
+        zone: originStop.zone ? {
+          id: originStop.zone.id,
+          name: originStop.zone.name
+        } : null
+      },
+      destination: {
+        id: destinationStop.id,
+        name: destinationStop.name,
+        commune: destinationStop.commune,
+        zone: destinationStop.zone ? {
+          id: destinationStop.zone.id,
+          name: destinationStop.zone.name
+        } : null
+      },
       routes,
       optimizedFor: validated.optimizeBy
     });
-    
+
   } catch (error: any) {
-    // Check if it's a ZodError
     if (error instanceof ZodError) {
       return res.status(400).json({
         error: 'Validation failed',
