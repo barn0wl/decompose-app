@@ -1,4 +1,4 @@
-import { PrismaClient, StopType, TransportType } from '../generated/prisma/index';
+import { PrismaClient, StopType, TransportType, SuggestionStatus } from '../generated/prisma/index';
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const adapter = new PrismaPg({
@@ -11,6 +11,7 @@ async function main() {
   console.log('🌱 Seeding database...');
 
   // Clean existing data (order matters due to foreign keys)
+  await prisma.suggestedConnection.deleteMany(); // clean suggestions first
   await prisma.connection.deleteMany();
   await prisma.stop.deleteMany();
   await prisma.zone.deleteMany();
@@ -87,6 +88,15 @@ async function main() {
         type: StopType.taxi_stop,
         zoneId: z('Yopougon Taxi Zone'),
       },
+      // Yopougon SOTRA stop
+      {
+        name: 'Yopougon SOTRA Terminus',
+        commune: 'Yopougon',
+        latitude: 5.3420,
+        longitude: -4.0750,
+        type: StopType.landmark,
+        zoneId: z('Yopougon Taxi Zone'),
+      },
 
       // Koumassi stops (Zone: Koumassi Taxi Zone)
       {
@@ -103,6 +113,15 @@ async function main() {
         latitude: 5.3050,
         longitude: -3.9750,
         type: StopType.gbaka_station,
+        zoneId: z('Koumassi Taxi Zone'),
+      },
+      // Koumassi SOTRA stop
+      {
+        name: 'Koumassi SOTRA Terminus',
+        commune: 'Koumassi',
+        latitude: 5.2980,
+        longitude: -3.9820,
+        type: StopType.landmark,
         zoneId: z('Koumassi Taxi Zone'),
       },
 
@@ -151,6 +170,15 @@ async function main() {
         type: StopType.landmark,
         zoneId: z('Plateau Central Zone'),
       },
+      // Plateau SOTRA stop
+      {
+        name: 'Plateau SOTRA Terminus',
+        commune: 'Plateau',
+        latitude: 5.3250,
+        longitude: -4.0180,
+        type: StopType.landmark,
+        zoneId: z('Plateau Central Zone'),
+      },
     ],
   });
 
@@ -191,7 +219,7 @@ async function main() {
     return connections;
   };
 
-  // ─── POINT-TO-POINT CONNECTIONS (Existing) ──────────────────────────────
+  // ─── POINT-TO-POINT CONNECTIONS ─────────────────────────────────────────
 
   const pointToPointConnections = createBidirectional([
     // Koumassi ↔ Treichville (communal taxi)
@@ -301,106 +329,241 @@ async function main() {
       description: 'Walk from Adjamé Liberté to 220 Logements',
       reverseDescription: 'Walk from 220 Logements to Adjamé Liberté',
     },
+
+    // ─── SOTRA BUS CONNECTIONS (NEW) ──────────────────────────────────
+    
+    // Yopougon SOTRA ↔ Plateau SOTRA
+    {
+      from: s('Yopougon SOTRA Terminus'),
+      to: s('Plateau SOTRA Terminus'),
+      type: TransportType.sotra_bus,
+      price: 300,
+      duration: 35,
+      description: 'SOTRA bus from Yopougon to Plateau',
+      reverseDescription: 'SOTRA bus from Plateau to Yopougon',
+    },
+    // Koumassi SOTRA ↔ Plateau SOTRA
+    {
+      from: s('Koumassi SOTRA Terminus'),
+      to: s('Plateau SOTRA Terminus'),
+      type: TransportType.sotra_bus,
+      price: 250,
+      duration: 25,
+      description: 'SOTRA bus from Koumassi to Plateau',
+      reverseDescription: 'SOTRA bus from Plateau to Koumassi',
+    },
+    // Yopougon SOTRA ↔ Koumassi SOTRA
+    {
+      from: s('Yopougon SOTRA Terminus'),
+      to: s('Koumassi SOTRA Terminus'),
+      type: TransportType.sotra_bus,
+      price: 350,
+      duration: 40,
+      description: 'SOTRA bus from Yopougon to Koumassi',
+      reverseDescription: 'SOTRA bus from Koumassi to Yopougon',
+    },
   ]);
 
   await prisma.connection.createMany({
     data: pointToPointConnections,
   });
 
-  // ─── ZONE-BASED CONNECTIONS (NEW) ──────────────────────────────────────
+  // ─── ZONE-BASED CONNECTIONS ──────────────────────────────────────────────
 
   console.log('📍 Creating zone-based connections...');
 
+  const zoneConnections = [
+    // Zone-to-Zone: Yopougon Taxi Zone → Yopougon Taxi Zone
+    {
+      fromZoneId: z('Yopougon Taxi Zone'),
+      toZoneId: z('Yopougon Taxi Zone'),
+      transportType: TransportType.communal_taxi,
+      basePrice: 200,
+      durationMinutes: 10,
+      routeDescription: 'Taxi within Yopougon (any stop)',
+    },
+    // Zone-to-Zone: Koumassi Taxi Zone → Koumassi Taxi Zone
+    {
+      fromZoneId: z('Koumassi Taxi Zone'),
+      toZoneId: z('Koumassi Taxi Zone'),
+      transportType: TransportType.communal_taxi,
+      basePrice: 150,
+      durationMinutes: 8,
+      routeDescription: 'Taxi within Koumassi (any stop)',
+    },
+    // Zone-to-Zone: Treichville Taxi Zone → Treichville Taxi Zone
+    {
+      fromZoneId: z('Treichville Taxi Zone'),
+      toZoneId: z('Treichville Taxi Zone'),
+      transportType: TransportType.communal_taxi,
+      basePrice: 150,
+      durationMinutes: 8,
+      routeDescription: 'Taxi within Treichville (any stop)',
+    },
+    // Stop-to-Zone: Carrefour La Vie → Any stop in Yopougon Taxi Zone
+    {
+      fromStopId: s('Carrefour La Vie'),
+      toZoneId: z('Yopougon Taxi Zone'),
+      transportType: TransportType.communal_taxi,
+      basePrice: 200,
+      durationMinutes: 10,
+      routeDescription: 'Taxi from Carrefour La Vie to anywhere in Yopougon',
+    },
+    // Zone-to-Stop: Yopougon Taxi Zone → Carrefour La Vie
+    {
+      fromZoneId: z('Yopougon Taxi Zone'),
+      toStopId: s('Carrefour La Vie'),
+      transportType: TransportType.communal_taxi,
+      basePrice: 200,
+      durationMinutes: 10,
+      routeDescription: 'Taxi from anywhere in Yopougon to Carrefour La Vie',
+    },
+    // Zone-to-Stop: Adjamé Gbaka Corridor → Adjamé Liberté
+    {
+      fromZoneId: z('Adjamé Gbaka Corridor'),
+      toStopId: s('Adjamé Liberté'),
+      transportType: TransportType.gbaka,
+      basePrice: 100,
+      durationMinutes: 5,
+      routeDescription: 'Gbaka from Adjamé corridor to Adjamé Liberté',
+    },
+    // Stop-to-Zone: Adjamé Liberté → Adjamé Gbaka Corridor
+    {
+      fromStopId: s('Adjamé Liberté'),
+      toZoneId: z('Adjamé Gbaka Corridor'),
+      transportType: TransportType.gbaka,
+      basePrice: 100,
+      durationMinutes: 5,
+      routeDescription: 'Gbaka from Adjamé Liberté to Adjamé corridor',
+    },
+    // Zone-to-Stop: Adjamé Gbaka Corridor → Carrefour La Vie
+    {
+      fromZoneId: z('Adjamé Gbaka Corridor'),
+      toStopId: s('Carrefour La Vie'),
+      transportType: TransportType.gbaka,
+      basePrice: 350,
+      durationMinutes: 25,
+      routeDescription: 'Gbaka from Adjamé corridor to Carrefour La Vie (Yopougon)',
+    },
+    // Stop-to-Zone: Carrefour La Vie → Adjamé Gbaka Corridor
+    {
+      fromStopId: s('Carrefour La Vie'),
+      toZoneId: z('Adjamé Gbaka Corridor'),
+      transportType: TransportType.gbaka,
+      basePrice: 350,
+      durationMinutes: 25,
+      routeDescription: 'Gbaka from Carrefour La Vie (Yopougon) to Adjamé corridor',
+    },
+  ];
+
   await prisma.connection.createMany({
-    data: [
-      // Zone-to-Zone: Yopougon Taxi Zone → Yopougon Taxi Zone (any taxi within Yopougon)
-      {
-        fromZoneId: z('Yopougon Taxi Zone'),
-        toZoneId: z('Yopougon Taxi Zone'),
-        transportType: TransportType.communal_taxi,
-        basePrice: 200,
-        durationMinutes: 10,
-        routeDescription: 'Taxi within Yopougon (any stop)',
-      },
-      // Zone-to-Zone: Koumassi Taxi Zone → Koumassi Taxi Zone
-      {
-        fromZoneId: z('Koumassi Taxi Zone'),
-        toZoneId: z('Koumassi Taxi Zone'),
-        transportType: TransportType.communal_taxi,
-        basePrice: 150,
-        durationMinutes: 8,
-        routeDescription: 'Taxi within Koumassi (any stop)',
-      },
-      // Zone-to-Zone: Treichville Taxi Zone → Treichville Taxi Zone
-      {
-        fromZoneId: z('Treichville Taxi Zone'),
-        toZoneId: z('Treichville Taxi Zone'),
-        transportType: TransportType.communal_taxi,
-        basePrice: 150,
-        durationMinutes: 8,
-        routeDescription: 'Taxi within Treichville (any stop)',
-      },
-      // Stop-to-Zone: Carrefour La Vie → Any stop in Yopougon Taxi Zone
-      {
-        fromStopId: s('Carrefour La Vie'),
-        toZoneId: z('Yopougon Taxi Zone'),
-        transportType: TransportType.communal_taxi,
-        basePrice: 200,
-        durationMinutes: 10,
-        routeDescription: 'Taxi from Carrefour La Vie to anywhere in Yopougon',
-      },
-      // Zone-to-Stop: Yopougon Taxi Zone → Carrefour La Vie
-      {
-        fromZoneId: z('Yopougon Taxi Zone'),
-        toStopId: s('Carrefour La Vie'),
-        transportType: TransportType.communal_taxi,
-        basePrice: 200,
-        durationMinutes: 10,
-        routeDescription: 'Taxi from anywhere in Yopougon to Carrefour La Vie',
-      },
-      // Zone-to-Stop: Adjamé Gbaka Corridor → Adjamé Liberté
-      {
-        fromZoneId: z('Adjamé Gbaka Corridor'),
-        toStopId: s('Adjamé Liberté'),
-        transportType: TransportType.gbaka,
-        basePrice: 100,
-        durationMinutes: 5,
-        routeDescription: 'Gbaka from Adjamé corridor to Adjamé Liberté',
-      },
-      // Stop-to-Zone: Adjamé Liberté → Adjamé Gbaka Corridor
-      {
-        fromStopId: s('Adjamé Liberté'),
-        toZoneId: z('Adjamé Gbaka Corridor'),
-        transportType: TransportType.gbaka,
-        basePrice: 100,
-        durationMinutes: 5,
-        routeDescription: 'Gbaka from Adjamé Liberté to Adjamé corridor',
-      },
-      // Zone-to-Stop: Adjamé Gbaka Corridor → Carrefour La Vie (Yopougon)
-      {
-        fromZoneId: z('Adjamé Gbaka Corridor'),
-        toStopId: s('Carrefour La Vie'),
-        transportType: TransportType.gbaka,
-        basePrice: 350,
-        durationMinutes: 25,
-        routeDescription: 'Gbaka from Adjamé corridor to Carrefour La Vie (Yopougon)',
-      },
-      // Stop-to-Zone: Carrefour La Vie → Adjamé Gbaka Corridor
-      {
-        fromStopId: s('Carrefour La Vie'),
-        toZoneId: z('Adjamé Gbaka Corridor'),
-        transportType: TransportType.gbaka,
-        basePrice: 350,
-        durationMinutes: 25,
-        routeDescription: 'Gbaka from Carrefour La Vie (Yopougon) to Adjamé corridor',
-      },
-    ],
+    data: zoneConnections,
   });
 
-  console.log(`✅ Seeded ${stops.length} stops`);
-  console.log(`✅ Seeded ${zones.length} zones`);
-  console.log(`✅ Seeded ${pointToPointConnections.length + 9} connections (${pointToPointConnections.length} point-to-point, 9 zone-based)`);
+  // ─── SAMPLE SUGGESTIONS ──────────────────────────────────────────
+
+  console.log('📍 Creating sample suggestions (for testing)...');
+
+  // Create 3 sample pending suggestions with different states
+  const deviceId1 = 'device-demo-001';
+  const deviceId2 = 'device-demo-002';
+  const deviceId3 = 'device-demo-003';
+
+  // Suggestion 1: Pending (0 confirmations)
+  await prisma.suggestedConnection.create({
+    data: {
+      fromStopId: s('Yopougon Toit Rouge'),
+      toStopId: s('Treichville Marché'),
+      transportType: TransportType.communal_taxi,
+      basePrice: 300,
+      durationMinutes: 25,
+      routeDescription: 'Taxi Yopougon Toit Rouge → Treichville Marché (suggested)',
+      submittedBy: deviceId1,
+      status: 'pending',
+      confirmations: 0,
+      confirmationThreshold: 5,
+      confirmedBy: [],
+    },
+  });
+
+  // Suggestion 2: Pending (2 confirmations - close to approval)
+  await prisma.suggestedConnection.create({
+    data: {
+      fromStopId: s('Yopougon Marché'),
+      toStopId: s('Plateau SOTRA Terminus'),
+      transportType: TransportType.sotra_bus,
+      basePrice: 350,
+      durationMinutes: 40,
+      routeDescription: 'SOTRA bus from Yopougon Marché to Plateau (suggested)',
+      submittedBy: deviceId2,
+      status: 'pending',
+      confirmations: 2,
+      confirmationThreshold: 5,
+      confirmedBy: [deviceId1, deviceId3],
+    },
+  });
+
+  // Suggestion 3: Approved (already in system - for testing)
+  const approvedSuggestion = await prisma.suggestedConnection.create({
+    data: {
+      fromStopId: s('Yopougon Toit Rouge'),
+      toStopId: s('Adjamé 220 Logements'),
+      transportType: TransportType.gbaka,
+      basePrice: 250,
+      durationMinutes: 15,
+      routeDescription: 'Gbaka from Yopougon Toit Rouge to Adjamé 220 (approved)',
+      submittedBy: deviceId2,
+      status: 'approved',
+      confirmations: 5,
+      confirmationThreshold: 5,
+      confirmedBy: ['device-demo-001', 'device-demo-002', 'device-demo-003', 'device-demo-004', 'device-demo-005'],
+      approvedAt: new Date(),
+    },
+  });
+
+  // Also create the actual connection for the approved suggestion
+  await prisma.connection.create({
+    data: {
+      fromStopId: s('Yopougon Toit Rouge'),
+      toStopId: s('Adjamé 220 Logements'),
+      transportType: TransportType.gbaka,
+      basePrice: 250,
+      durationMinutes: 15,
+      routeDescription: 'Gbaka from Yopougon Toit Rouge to Adjamé 220 (community approved)',
+      upvotes: 3,
+      downvotes: 0,
+      voteScore: 3,
+      votedBy: [
+        { deviceId: 'device-demo-001', vote: 1 },
+        { deviceId: 'device-demo-002', vote: 1 },
+        { deviceId: 'device-demo-003', vote: 1 },
+      ],
+    },
+  });
+
+  // ─── SUMMARY ────────────────────────────────────────────────────────────
+
+  const totalStops = await prisma.stop.count();
+  const totalZones = await prisma.zone.count();
+  const totalConnections = await prisma.connection.count();
+  const totalSuggestions = await prisma.suggestedConnection.count();
+
+  console.log(`✅ Seeded ${totalStops} stops`);
+  console.log(`✅ Seeded ${totalZones} zones`);
+  console.log(`✅ Seeded ${totalConnections} connections`);
+  console.log(`✅ Seeded ${totalSuggestions} suggestions (${await prisma.suggestedConnection.count({ where: { status: 'pending' } })} pending, ${await prisma.suggestedConnection.count({ where: { status: 'approved' } })} approved)`);
   console.log('🎉 Done!');
+
+  // Print sample data for testing
+  console.log('\n📋 Sample data for testing:');
+  console.log('Device IDs:');
+  console.log('  - demo-001 (submitter)');
+  console.log('  - demo-002 (submitter)');
+  console.log('  - demo-003 (confirmer)');
+  console.log('\nTest endpoints:');
+  console.log('  GET  /api/suggestions/pending?deviceId=demo-003');
+  console.log('  POST /api/suggestions/:id/confirm (body: { deviceId: "demo-003" })');
+  console.log('  POST /api/votes (body: { connectionId: "...", deviceId: "demo-003", vote: 1 })');
 }
 
 main()
