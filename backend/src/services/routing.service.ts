@@ -147,10 +147,34 @@ class RoutingService {
     return { steps };
   }
 
+  /**
+   * Calculate effective weight considering votes
+   * High upvotes = lower weight (more attractive)
+   * High downvotes = higher weight (less attractive)
+   */
+  private getVoteAdjustedWeight(edge: GraphEdge, baseWeight: number): number {
+    // We need to get the connection to check votes
+    // For now, we'll use the edge's price/duration directly
+    // This will be enhanced in Phase 5 when we add full vote integration
+    
+    // For Phase 1, just return the base weight
+    return baseWeight;
+  }
+
   private getWeight(edge: GraphEdge, weightKey: WeightKey): number {
-    if (weightKey === 'price') return edge.price;
-    if (weightKey === 'duration') return edge.duration;
-    return (edge.price / 10) + edge.duration;
+    let baseWeight: number;
+    
+    if (weightKey === 'price') {
+      baseWeight = edge.price;
+    } else if (weightKey === 'duration') {
+      baseWeight = edge.duration;
+    } else {
+      // Balanced: normalize price and duration
+      baseWeight = (edge.price / 10) + edge.duration;
+    }
+    
+    // Apply vote-based adjustment (Phase 5 will implement fully)
+    return this.getVoteAdjustedWeight(edge, baseWeight);
   }
 
   private formatRoute(steps: GraphEdge[]): CalculatedRoute {
