@@ -7,6 +7,31 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─── ENUMS ────────────────────────────────────────────────────────────────
+
+enum StopType {
+  taxi_stop
+  gbaka_station
+  landmark
+  zone_boundary
+}
+
+enum TransportType {
+  communal_taxi
+  gbaka
+  sotra_bus
+  walking
+}
+
+enum SuggestionStatus {
+  pending
+  approved
+  rejected
+  auto_rejected
+}
+
+// ─── MODELS ──────────────────────────────────────────────────────────────
+
 model Stop {
   id        String   @id @default(uuid())
   name      String
@@ -21,13 +46,11 @@ model Stop {
 
   connectionsFrom Connection[] @relation("FromStop")
   connectionsTo   Connection[] @relation("ToStop")
-}
-
-enum StopType {
-  taxi_stop
-  gbaka_station
-  landmark
-  zone_boundary
+  
+  // Suggested connections (if this stop is the origin)
+  suggestedFrom SuggestedConnection[] @relation("SuggestionFrom")
+  // Suggested connections (if this stop is the destination)
+  suggestedTo   SuggestedConnection[] @relation("SuggestionTo")
 }
 
 model Zone {
@@ -35,11 +58,10 @@ model Zone {
   name        String
   commune     String
   description String?
-
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
-  stops       Stop[]
+
+  stops           Stop[]
   connectionsFrom Connection[] @relation("FromZone")
   connectionsTo   Connection[] @relation("ToZone")
 }
@@ -47,13 +69,13 @@ model Zone {
 model Connection {
   id String @id @default(uuid())
 
-  // Origin — either a specific stop or a zone (one must be set)
+  // Origin
   fromStopId String?
   fromStop   Stop?  @relation("FromStop", fields: [fromStopId], references: [id])
   fromZoneId String?
   fromZone   Zone?  @relation("FromZone", fields: [fromZoneId], references: [id])
 
-  // Destination — either a specific stop or a zone (one must be set)
+  // Destination
   toStopId String?
   toStop   Stop?  @relation("ToStop", fields: [toStopId], references: [id])
   toZoneId String?
@@ -61,15 +83,53 @@ model Connection {
 
   transportType    TransportType
   basePrice        Int
-  pricePerZone     Int?         // post-MVP: graduated pricing
+  pricePerZone     Int?
   durationMinutes  Int
   routeDescription String?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
+
+  // ─── Vote Tracking  ──────────────────────────────────────────────
+  upvotes         Int    @default(0)
+  downvotes       Int    @default(0)
+  voteScore       Int    @default(0)
+  votedBy         Json?  // Array of { deviceId: string, vote: 1|-1 }
 }
 
-enum TransportType {
-  communal_taxi
-  gbaka
-  walking
+// ─── SUGGESTED CONNECTION  ────────────────────────────────────────
+
+model SuggestedConnection {
+  id String @id @default(uuid())
+
+  // Connection details (same as Connection model)
+  fromStopId      String
+  fromStop        Stop           @relation("SuggestionFrom", fields: [fromStopId], references: [id])
+  toStopId        String
+  toStop          Stop           @relation("SuggestionTo", fields: [toStopId], references: [id])
+  
+  transportType   TransportType
+  basePrice       Int
+  durationMinutes Int
+  routeDescription String?
+
+  // Suggestion metadata
+  submittedBy     String         // Device ID
+  submittedAt     DateTime       @default(now())
+  
+  // Validation system
+  status          SuggestionStatus @default(pending)
+  confirmations   Int            @default(0)
+  confirmationThreshold Int      @default(5) // Fixed at 5
+  
+  // Track who confirmed (array of device IDs)
+  confirmedBy     Json?          // Array of device IDs
+  
+  // Rejection info
+  rejectedBy      String?
+  rejectedReason  String?
+  rejectedAt      DateTime?
+  approvedAt      DateTime?
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 }
