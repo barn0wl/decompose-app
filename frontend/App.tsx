@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import HomeScreen from './src/screens/HomeScreen';
 import ResultsScreen from './src/screens/ResultsScreen';
 import RouteDetailScreen from './src/screens/RouteDetailScreen';
+import SuggestConnectionScreen from './src/screens/SuggestConnectionScreen';
 import { RootStackParamList } from './src/types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -18,12 +19,13 @@ export default function App() {
           <Stack.Navigator
             initialRouteName="Home"
             screenOptions={{
-              headerShown: false, // we'll build our own headers with Paper's Appbar
+              headerShown: false,
             }}
           >
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="Results" component={ResultsScreen} />
             <Stack.Screen name="RouteDetail" component={RouteDetailScreen} />
+            <Stack.Screen name="SuggestConnection" component={SuggestConnectionScreen} />
           </Stack.Navigator>
         </NavigationContainer>
       </PaperProvider>

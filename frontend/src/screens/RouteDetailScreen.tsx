@@ -61,8 +61,7 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
       <Appbar.Header>
         <Appbar.BackAction onPress={handleGoBack} />
         <Appbar.Content 
-          title="Détail du trajet" 
-          subtitle={`${originName} → ${destinationName}`}
+          title="Détail du trajet"
         />
       </Appbar.Header>
 

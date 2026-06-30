@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '../constants';
-import { Stop, CalculateRouteResponse } from '../types';
+import { Stop, CalculateRouteResponse, SuggestedConnection, Connection } from '../types';
 
 // ─── Generic fetch wrapper ─────────────────────────────────────────────────────
 
@@ -42,4 +42,92 @@ export async function calculateRoute(
     method: 'POST',
     body: JSON.stringify({ originStopId, destinationStopId, optimizeBy }),
   });
+}
+
+// ─── Suggestions ─────────────────────────────────────────────────────────────
+
+export interface CreateSuggestionInput {
+  fromStopId: string;
+  toStopId: string;
+  transportType: 'communal_taxi' | 'gbaka' | 'sotra_bus' | 'walking';
+  basePrice: number;
+  durationMinutes: number;
+  routeDescription?: string;
+  deviceId: string;
+}
+
+export async function createSuggestion(data: CreateSuggestionInput): Promise<SuggestedConnection> {
+  return apiFetch<SuggestedConnection>('/suggestions', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getPendingSuggestions(deviceId: string): Promise<{
+  suggestions: SuggestedConnection[];
+  count: number;
+}> {
+  return apiFetch<{ suggestions: SuggestedConnection[]; count: number }>(
+    `/suggestions/pending?deviceId=${deviceId}`
+  );
+}
+
+export async function confirmSuggestion(
+  suggestionId: string,
+  deviceId: string
+): Promise<{
+  success: boolean;
+  approved: boolean;
+  message: string;
+  remainingConfirmations?: number;
+  connection?: Connection;
+}> {
+  return apiFetch(`/suggestions/${suggestionId}/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({ deviceId }),
+  });
+}
+
+export async function getPendingCount(deviceId: string): Promise<{ count: number }> {
+  return apiFetch<{ count: number }>(`/suggestions/pending/count?deviceId=${deviceId}`);
+}
+
+// ─── Votes ───────────────────────────────────────────────────────────────────
+
+export interface VoteInput {
+  connectionId: string;
+  deviceId: string;
+  vote: 1 | -1; // 1 = upvote, -1 = downvote
+}
+
+export interface VoteResponse {
+  success: boolean;
+  message: string;
+  voteScore: number;
+  totalVotes: number;
+  userVote: 1 | -1 | 0;
+  connection: Connection;
+}
+
+export async function castVote(data: VoteInput): Promise<VoteResponse> {
+  return apiFetch<VoteResponse>('/votes', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getVoteStats(
+  connectionId: string,
+  deviceId?: string
+): Promise<{
+  upvotes: number;
+  downvotes: number;
+  voteScore: number;
+  totalVotes: number;
+  userVote: 1 | -1 | 0;
+}> {
+  const url = deviceId
+    ? `/votes/${connectionId}?deviceId=${deviceId}`
+    : `/votes/${connectionId}`;
+  return apiFetch(url);
 }

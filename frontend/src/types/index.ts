@@ -1,7 +1,7 @@
 // ─── Navigation ───────────────────────────────────────────────────────────────
 
 export type RootStackParamList = {
-  Home: undefined; // no params needed
+  Home: undefined;
   Results: {
     originId: string;
     originName: string;
@@ -15,6 +15,7 @@ export type RootStackParamList = {
     originName: string;
     destinationName: string;
   };
+  SuggestConnection: undefined;
 };
 
 // ─── API types (mirror your backend) ──────────────────────────────────────────
@@ -29,7 +30,7 @@ export interface Stop {
 }
 
 export interface RouteStep {
-  type: 'communal_taxi' | 'gbaka' | 'walking';
+  type: 'communal_taxi' | 'gbaka' | 'sotra_bus' | 'walking';
   from: string;
   to: string;
   price: number;
@@ -49,4 +50,39 @@ export interface CalculateRouteResponse {
   destination: Pick<Stop, 'id' | 'name' | 'commune'>;
   routes: CalculatedRoute[];
   optimizedFor: 'price' | 'time' | 'balanced';
+}
+
+// ─── Suggestion Types ────────────────────────────────────────────────────────
+
+export interface SuggestedConnection {
+  id: string;
+  fromStopId: string;
+  toStopId: string;
+  fromStop: Stop;
+  toStop: Stop;
+  transportType: string;
+  basePrice: number;
+  durationMinutes: number;
+  routeDescription?: string;
+  submittedBy: string;
+  submittedAt: string;
+  status: 'pending' | 'approved' | 'rejected' | 'auto_rejected';
+  confirmations: number;
+  confirmationThreshold: number;
+  confirmedBy: string[];
+}
+
+export interface Connection {
+  id: string;
+  fromStopId: string;
+  toStopId: string;
+  fromStop?: Stop;
+  toStop?: Stop;
+  transportType: string;
+  basePrice: number;
+  durationMinutes: number;
+  routeDescription?: string;
+  upvotes: number;
+  downvotes: number;
+  voteScore: number;
 }

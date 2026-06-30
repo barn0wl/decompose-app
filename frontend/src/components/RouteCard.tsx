@@ -1,33 +1,13 @@
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Card, Text, Chip } from 'react-native-paper';
 
-import { CalculatedRoute, RouteStep } from '../types';
+import { CalculatedRoute } from '../types';
+import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
 
 interface Props {
   route: CalculatedRoute;
   onPress: (route: CalculatedRoute) => void;
-  rank: number; // 1st, 2nd, 3rd result — used for the label
-}
-
-// Maps transport type to a readable French label
-const TRANSPORT_LABELS: Record<RouteStep['type'], string> = {
-  communal_taxi: 'Taxi',
-  gbaka: 'Gbaka',
-  walking: 'À pied',
-};
-
-// Builds a deduped, ordered summary like "À pied · Gbaka · Taxi"
-function buildTransportSummary(steps: RouteStep[]): string {
-  const seen = new Set<string>();
-  const order: string[] = [];
-  for (const step of steps) {
-    const label = TRANSPORT_LABELS[step.type];
-    if (!seen.has(label)) {
-      seen.add(label);
-      order.push(label);
-    }
-  }
-  return order.join(' · ');
+  rank: number;
 }
 
 function formatDuration(minutes: number): string {
@@ -38,7 +18,6 @@ function formatDuration(minutes: number): string {
 }
 
 export default function RouteCard({ route, onPress, rank }: Props) {
-  const transportSummary = buildTransportSummary(route.steps);
   const stepCount = route.steps.length;
 
   return (
@@ -70,6 +49,7 @@ export default function RouteCard({ route, onPress, rank }: Props) {
                 compact
                 style={styles.chip}
                 textStyle={styles.chipText}
+                icon={() => <Text style={styles.chipIcon}>{TRANSPORT_ICONS[step.type]}</Text>}
               >
                 {TRANSPORT_LABELS[step.type]}
               </Chip>
@@ -129,5 +109,9 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: 11,
+  },
+  chipIcon: {
+    fontSize: 14,
+    marginRight: 2,
   },
 });

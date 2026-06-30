@@ -1,24 +1,43 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, Button, SegmentedButtons, Appbar } from 'react-native-paper';
+import { Text, Button, SegmentedButtons, Appbar, Badge } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import StopSearchInput from '../components/StopSearchInput';
-import { calculateRoute } from '../services/api';
+import PendingBanner from '../components/PendingBanner';
+import { calculateRoute, getPendingCount } from '../services/api';
 import { RootStackParamList, Stop } from '../types';
+import { useDeviceId } from '../hooks/useDeviceId';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 type OptimizeBy = 'price' | 'time' | 'balanced';
 
 export default function HomeScreen({ navigation }: Props) {
+  const deviceId = useDeviceId();
+  
   const [origin, setOrigin] = useState<Stop | null>(null);
   const [destination, setDestination] = useState<Stop | null>(null);
   const [optimizeBy, setOptimizeBy] = useState<OptimizeBy>('price');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const canSearch = origin !== null && destination !== null && !isLoading;
+
+  // Fetch pending count for banner
+  useEffect(() => {
+    const fetchPendingCount = async () => {
+      if (!deviceId) return;
+      try {
+        const data = await getPendingCount(deviceId);
+        setPendingCount(data.count);
+      } catch {
+        // Silently fail - banner just won't show
+      }
+    };
+    fetchPendingCount();
+  }, [deviceId]);
 
   const handleSearch = useCallback(async () => {
     if (!origin || !destination) return;
@@ -47,20 +66,31 @@ export default function HomeScreen({ navigation }: Props) {
     }
   }, [origin, destination, optimizeBy, navigation]);
 
+  const handleSuggestRoute = () => {
+    navigation.navigate('SuggestConnection');
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <Appbar.Header>
-        <Appbar.Content title="Décompose" subtitle="Trouve ton trajet" />
+        <Appbar.Content title="Décompose"/>
+        <Appbar.Action icon="plus-circle" onPress={handleSuggestRoute} />
       </Appbar.Header>
 
-      {/* KeyboardAvoidingView pushes content up when keyboard opens */}
+      {/* Pending Banner */}
+      {pendingCount > 0 && (
+        <PendingBanner 
+          count={pendingCount} 
+          onPress={() => navigation.navigate('SuggestConnection')}
+        />
+      )}
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.content}>
           <Text variant="titleMedium" style={styles.sectionLabel}>D'où tu pars ?</Text>
-          {/* Higher zIndex so its dropdown renders above the destination input */}
           <StopSearchInput
             label="Point de départ"
             selectedStop={origin}
@@ -102,6 +132,16 @@ export default function HomeScreen({ navigation }: Props) {
           >
             Décomposer
           </Button>
+
+          <Button
+            mode="outlined"
+            onPress={handleSuggestRoute}
+            style={styles.suggestButton}
+            contentStyle={styles.suggestButtonContent}
+            icon="plus"
+          >
+            Suggest a new route
+          </Button>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -138,6 +178,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   buttonContent: {
+    paddingVertical: 6,
+  },
+  suggestButton: {
+    marginTop: 12,
+    borderRadius: 8,
+    borderColor: '#6200ee',
+  },
+  suggestButtonContent: {
     paddingVertical: 6,
   },
 });

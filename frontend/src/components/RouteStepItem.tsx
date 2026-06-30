@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { Text, Chip } from 'react-native-paper';
 import { RouteStep } from '../types';
+import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
 
 interface Props {
   step: RouteStep;
@@ -8,18 +9,6 @@ interface Props {
   isFirst: boolean;
   isLast: boolean;
 }
-
-const TRANSPORT_ICONS: Record<RouteStep['type'], string> = {
-  communal_taxi: '🚕',
-  gbaka: '🚌',
-  walking: '🚶',
-};
-
-const TRANSPORT_LABELS: Record<RouteStep['type'], string> = {
-  communal_taxi: 'Taxi communal',
-  gbaka: 'Gbaka',
-  walking: 'À pied',
-};
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} min`;
@@ -31,7 +20,6 @@ function formatDuration(minutes: number): string {
 export default function RouteStepItem({ step, index, isFirst, isLast }: Props) {
   return (
     <View style={styles.container}>
-      {/* Connector line and dot */}
       <View style={styles.connectorContainer}>
         {!isFirst && <View style={styles.connectorLine} />}
         <View style={styles.stepDot}>
@@ -40,7 +28,6 @@ export default function RouteStepItem({ step, index, isFirst, isLast }: Props) {
         {!isLast && <View style={styles.connectorLine} />}
       </View>
 
-      {/* Step content */}
       <View style={styles.content}>
         <View style={styles.header}>
           <View style={styles.typeContainer}>
