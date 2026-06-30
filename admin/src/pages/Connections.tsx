@@ -40,6 +40,30 @@ export default function Connections() {
     }
   };
 
+  // Helper to get display name for from/to
+  const getDisplayName = (connection: Connection, type: 'from' | 'to') => {
+    if (type === 'from') {
+      if (connection.fromStop) return connection.fromStop.name;
+      if (connection.fromZone) return `📍 ${connection.fromZone.name}`;
+      return 'N/A';
+    } else {
+      if (connection.toStop) return connection.toStop.name;
+      if (connection.toZone) return `📍 ${connection.toZone.name}`;
+      return 'N/A';
+    }
+  };
+
+  // Helper to get commune for from/to
+  const getCommune = (connection: Connection, type: 'from' | 'to') => {
+    if (type === 'from') {
+      if (connection.fromStop) return connection.fromStop.commune;
+      return 'Zone-based';
+    } else {
+      if (connection.toStop) return connection.toStop.commune;
+      return 'Zone-based';
+    }
+  };
+
   if (loading) return <div className="loading">Loading...</div>;
   if (error) return <div className="error">{error}</div>;
 
@@ -68,9 +92,15 @@ export default function Connections() {
               {connections.map((c) => (
                 <tr key={c.id}>
                   <td>
-                    <strong>{c.fromStop?.name || 'N/A'}</strong>
+                    <strong>{getDisplayName(c, 'from')}</strong>
                     <br />
-                    <small style={{ color: '#888' }}>→ {c.toStop?.name || 'N/A'}</small>
+                    <small style={{ color: '#888' }}>
+                      → {getDisplayName(c, 'to')}
+                      <br />
+                      <span style={{ fontSize: '10px', color: '#aaa' }}>
+                        {getCommune(c, 'from')} → {getCommune(c, 'to')}
+                      </span>
+                    </small>
                   </td>
                   <td>{TRANSPORT_LABELS[c.transportType] || c.transportType}</td>
                   <td>{c.basePrice} CFA</td>

@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-// Use relative path since Vite proxies /api
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -24,10 +23,14 @@ export interface Stop {
 
 export interface Connection {
   id: string;
-  fromStopId: string;
-  toStopId: string;
-  fromStop?: { id: string; name: string; commune: string };
-  toStop?: { id: string; name: string; commune: string };
+  fromStopId?: string;
+  toStopId?: string;
+  fromStop?: Stop;
+  toStop?: Stop;
+  fromZoneId?: string;
+  toZoneId?: string;
+  fromZone?: { id: string; name: string };
+  toZone?: { id: string; name: string };
   transportType: string;
   basePrice: number;
   durationMinutes: number;
