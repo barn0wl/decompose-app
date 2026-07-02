@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity, Keyboard } from 'react-native';
 import { TextInput, Text, ActivityIndicator } from 'react-native-paper';
 
 import { useDebounce } from '../hooks/useDebounce';
@@ -57,6 +57,7 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop, z
     setResults([]);
     setIsOpen(false);
     setIsFocused(false);
+    Keyboard.dismiss();
   }, [onStopSelected]);
 
   const handleChangeText = useCallback((text: string) => {

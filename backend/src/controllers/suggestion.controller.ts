@@ -11,7 +11,7 @@ const createSuggestionSchema = z.object({
   basePrice: z.number().int().positive(),
   durationMinutes: z.number().int().positive(),
   routeDescription: z.string().optional(),
-  submittedBy: z.string().min(1),
+  deviceId: z.string().min(1),
 });
 
 const confirmSuggestionSchema = z.object({
@@ -25,7 +25,17 @@ const confirmSuggestionSchema = z.object({
 export async function createSuggestion(req: Request, res: Response) {
   try {
     const validated = createSuggestionSchema.parse(req.body);
-    const result = await suggestionService.createSuggestion(validated);
+    
+    const result = await suggestionService.createSuggestion({
+      fromStopId: validated.fromStopId,
+      toStopId: validated.toStopId,
+      transportType: validated.transportType,
+      basePrice: validated.basePrice,
+      durationMinutes: validated.durationMinutes,
+      routeDescription: validated.routeDescription,
+      submittedBy: validated.deviceId,
+    });
+    
     res.status(201).json({
       success: true,
       suggestion: result,
