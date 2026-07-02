@@ -81,7 +81,7 @@ export default function HomeScreen({ navigation }: Props) {
       {pendingCount > 0 && (
         <PendingBanner 
           count={pendingCount} 
-          onPress={() => navigation.navigate('SuggestConnection')}
+          onPress={() => navigation.navigate('PendingConfirmations')}
         />
       )}
 

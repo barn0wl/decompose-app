@@ -16,6 +16,7 @@ export type RootStackParamList = {
     destinationName: string;
   };
   SuggestConnection: undefined;
+  PendingConfirmations: undefined;
 };
 
 // ─── API types (mirror your backend) ──────────────────────────────────────────

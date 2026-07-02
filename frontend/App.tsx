@@ -7,6 +7,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import ResultsScreen from './src/screens/ResultsScreen';
 import RouteDetailScreen from './src/screens/RouteDetailScreen';
 import SuggestConnectionScreen from './src/screens/SuggestConnectionScreen';
+import PendingConfirmationsScreen from './src/screens/PendingConfirmationsScreen';
 import { RootStackParamList } from './src/types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -26,6 +27,7 @@ export default function App() {
             <Stack.Screen name="Results" component={ResultsScreen} />
             <Stack.Screen name="RouteDetail" component={RouteDetailScreen} />
             <Stack.Screen name="SuggestConnection" component={SuggestConnectionScreen} />
+            <Stack.Screen name="PendingConfirmations" component={PendingConfirmationsScreen} />
           </Stack.Navigator>
         </NavigationContainer>
       </PaperProvider>

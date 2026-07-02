@@ -1,10 +1,14 @@
+import { useState, useEffect } from 'react';
 import { StyleSheet, FlatList, View } from 'react-native';
-import { Text, Appbar } from 'react-native-paper';
+import { Text, Appbar, Button, Card, Chip } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import RouteCard from '../components/RouteCard';
-import { RootStackParamList, CalculatedRoute } from '../types';
+import { RootStackParamList, CalculatedRoute, SuggestedConnection } from '../types';
+import { getPendingSuggestions } from '../services/api';
+import { useDeviceId } from '../hooks/useDeviceId';
+import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Results'>;
 
@@ -15,7 +19,33 @@ const OPTIMIZE_LABELS = {
 };
 
 export default function ResultsScreen({ navigation, route }: Props) {
+  const deviceId = useDeviceId();
   const { originName, destinationName, optimizeBy, routes } = route.params;
+  const [contextualSuggestions, setContextualSuggestions] = useState<SuggestedConnection[]>([]);
+  const [showContextual, setShowContextual] = useState(false);
+
+  // Fetch contextual suggestions based on the search
+  useEffect(() => {
+    const fetchContextualSuggestions = async () => {
+      if (!deviceId) return;
+      try {
+        const data = await getPendingSuggestions(deviceId);
+        // Show up to 2 suggestions that match the searched area
+        const matching = data.suggestions.filter(s => 
+          s.fromStop.commune === originName || 
+          s.toStop.commune === destinationName ||
+          s.fromStop.commune === destinationName ||
+          s.toStop.commune === originName
+        ).slice(0, 2);
+        
+        setContextualSuggestions(matching);
+        setShowContextual(matching.length > 0);
+      } catch {
+        // Silently fail
+      }
+    };
+    fetchContextualSuggestions();
+  }, [deviceId, originName, destinationName]);
 
   const handleRoutePress = (selectedRoute: CalculatedRoute) => {
     navigation.navigate('RouteDetail', {
@@ -23,6 +53,10 @@ export default function ResultsScreen({ navigation, route }: Props) {
       originName,
       destinationName,
     });
+  };
+
+  const handleConfirmSuggestion = () => {
+    navigation.navigate('PendingConfirmations');
   };
 
   const renderHeader = () => (
@@ -40,6 +74,43 @@ export default function ResultsScreen({ navigation, route }: Props) {
         {OPTIMIZE_LABELS[optimizeBy]}
       </Text>
     </View>
+  );
+
+  const renderContextualPrompt = () => (
+    <Card style={styles.contextualCard}>
+      <Card.Content>
+        <View style={styles.contextualHeader}>
+          <Text style={styles.contextualIcon}>💡</Text>
+          <View style={styles.contextualText}>
+            <Text style={styles.contextualTitle}>Help verify routes!</Text>
+            <Text style={styles.contextualSubtitle}>
+              {contextualSuggestions.length} pending route{contextualSuggestions.length > 1 ? 's' : ''} near your search
+            </Text>
+          </View>
+        </View>
+        {contextualSuggestions.map((s) => (
+          <View key={s.id} style={styles.contextualSuggestion}>
+            <Text style={styles.contextualRoute}>
+              {s.fromStop.name} → {s.toStop.name}
+            </Text>
+            <View style={styles.contextualMeta}>
+              <Chip compact style={styles.contextualChip}>
+                {TRANSPORT_ICONS[s.transportType]} {TRANSPORT_LABELS[s.transportType]}
+              </Chip>
+              <Text style={styles.contextualPrice}>{s.basePrice} CFA</Text>
+            </View>
+          </View>
+        ))}
+        <Button
+          mode="contained"
+          onPress={handleConfirmSuggestion}
+          style={styles.contextualButton}
+          compact
+        >
+          Confirm Routes
+        </Button>
+      </Card.Content>
+    </Card>
   );
 
   const renderEmpty = () => (
@@ -70,7 +141,12 @@ export default function ResultsScreen({ navigation, route }: Props) {
             rank={index + 1}
           />
         )}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={
+          <>
+            {renderHeader()}
+            {showContextual && renderContextualPrompt()}
+          </>
+        }
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.list}
       />
@@ -135,5 +211,63 @@ const styles = StyleSheet.create({
   emptyHint: {
     textAlign: 'center',
     color: '#888',
+  },
+  contextualCard: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  contextualHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  contextualIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  contextualText: {
+    flex: 1,
+  },
+  contextualTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2E7D32',
+  },
+  contextualSubtitle: {
+    fontSize: 12,
+    color: '#388E3C',
+  },
+  contextualSuggestion: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+  },
+  contextualRoute: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#1a1a1a',
+  },
+  contextualMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  contextualChip: {
+    height: 24,
+    backgroundColor: '#f0f0f0',
+  },
+  contextualPrice: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  contextualButton: {
+    borderRadius: 8,
+    marginTop: 4,
   },
 });
