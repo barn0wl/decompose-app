@@ -148,13 +148,40 @@ class RoutingService {
    * High downvotes = higher weight (less attractive)
    */
   private async getVoteAdjustedWeight(edge: GraphEdge, baseWeight: number): Promise<number> {
-    // For now, we need to find the connection ID for this edge
-    // Since we don't store connection ID in GraphEdge, we'll use a simplified approach
-    // In a production app, you'd store connectionId in GraphEdge
+    if (!edge.connectionId) {
+      return baseWeight;
+    }
     
-    // Simplified: return base weight without adjustment for now
-    // This will be enhanced when we add connectionId to GraphEdge
-    return baseWeight;
+    // Get connection with vote stats
+    const connection = await prisma.connection.findUnique({
+      where: { id: edge.connectionId },
+      select: {
+        upvotes: true,
+        downvotes: true,
+        voteScore: true,
+      }
+    });
+    
+    if (!connection) {
+      return baseWeight;
+    }
+    
+    const totalVotes = connection.upvotes + connection.downvotes;
+    
+    // If no votes, return base weight
+    if (totalVotes === 0) {
+      return baseWeight;
+    }
+    
+    // Calculate confidence score from -1 to 1
+    const confidence = (connection.upvotes - connection.downvotes) / totalVotes;
+    
+    // Apply confidence modifier
+    // confidence: 1 = perfect, 0 = neutral, -1 = terrible
+    // modifier: 0.5x (boost) to 1.5x (penalty)
+    const modifier = 1 - (confidence * 0.5);
+    
+    return baseWeight * modifier;
   }
 
   private async getWeight(edge: GraphEdge, weightKey: WeightKey): Promise<number> {
@@ -189,7 +216,8 @@ class RoutingService {
         duration: s.duration,
         instructions: s.instructions,
         fromZone: s.fromZoneId || null,
-        toZone: s.toZoneId || null
+        toZone: s.toZoneId || null,
+        connectionId: s.connectionId,
       }))
     };
   }

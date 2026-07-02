@@ -56,21 +56,29 @@ export async function getVoteStats(req: Request, res: Response) {
 
     const { deviceId } = req.query;
     
+    if (!id) {
+      return res.status(400).json({ error: 'Connection ID is required' });
+    }
+    
     const stats = await voteService.getVoteStats(id);
     
     let userVote = 0;
     if (deviceId && typeof deviceId === 'string') {
       userVote = await voteService.getUserVote(id, deviceId);
     }
-
+    
+    // Return in VoteStats format
     res.json({
-      ...stats,
+      upvotes: stats.upvotes,
+      downvotes: stats.downvotes,
+      voteScore: stats.voteScore,
+      totalVotes: stats.totalVotes,
       userVote,
     });
   } catch (error: any) {
     console.error('Get vote stats error:', error);
-    res.status(500).json({
-      error: error.message || 'Failed to get vote stats'
+    res.status(500).json({ 
+      error: error.message || 'Failed to get vote stats' 
     });
   }
 }

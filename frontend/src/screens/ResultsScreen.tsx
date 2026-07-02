@@ -54,7 +54,18 @@ export default function ResultsScreen({ navigation, route }: Props) {
       if (!deviceId || routes.length === 0) return;
       
       try {
-        const connectionIds = routes.map(r => r.id);
+        // Collect all connection IDs from all steps of all routes
+        const connectionIds: string[] = [];
+        routes.forEach(route => {
+          route.steps.forEach(step => {
+            if (step.connectionId && !connectionIds.includes(step.connectionId)) {
+              connectionIds.push(step.connectionId);
+            }
+          });
+        });
+        
+        if (connectionIds.length === 0) return;
+        
         const stats = await getVotesForConnections(connectionIds, deviceId);
         setVoteStats(stats);
       } catch {
@@ -177,18 +188,25 @@ export default function ResultsScreen({ navigation, route }: Props) {
         <Appbar.Content title="Résultats" />
       </Appbar.Header>
 
+      {/* TODO: the vote stats that show up for the different route results here shouldnt be the stats of one singular 
+      step in the route, but an aggregate (maybe a score that routing algorithm generated or something we computed here */}
+
       <FlatList
         data={routes}
         keyExtractor={item => item.id}
         renderItem={({ item, index }) => {
-          const stats = voteStats[item.id];
+          // Get connection ID from first step
+          const connectionId = item.steps[0]?.connectionId || item.id;
+          const stats = voteStats[connectionId];
+          
           return (
             <RouteCard
               route={item}
               onPress={handleRoutePress}
               onVote={handleVote}
               rank={index + 1}
-              userVotes={stats ? { [item.id]: stats.userVote } : {}}
+              userVotes={stats ? { [connectionId]: stats.userVote } : {}}
+              voteStats={stats ? { [connectionId]: { upvotes: stats.upvotes, downvotes: stats.downvotes } } : {}}
             />
           );
         }}

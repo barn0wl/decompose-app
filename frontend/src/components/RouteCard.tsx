@@ -5,12 +5,15 @@ import { CalculatedRoute } from '../types';
 import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
 import VoteButtons from './VoteButtons';
 
+// TODO: For multi-step routes, we could show votes for each step or average them
+
 interface Props {
   route: CalculatedRoute;
   onPress: (route: CalculatedRoute) => void;
   onVote: (connectionId: string, vote: 1 | -1) => Promise<void>;
   rank: number;
   userVotes?: Record<string, 1 | -1 | 0>;
+  voteStats?: Record<string, { upvotes: number; downvotes: number }>;
 }
 
 function formatDuration(minutes: number): string {
@@ -20,19 +23,23 @@ function formatDuration(minutes: number): string {
   return m > 0 ? `${h}h${m.toString().padStart(2, '0')}` : `${h}h`;
 }
 
-export default function RouteCard({ 
-  route, 
-  onPress, 
+export default function RouteCard({
+  route,
+  onPress,
   onVote,
   rank,
-  userVotes = {}
+  userVotes = {},
+  voteStats = {}
 }: Props) {
   const stepCount = route.steps.length;
   
-  // Get the first step's connection ID (for voting)
-  // In a real scenario, each step would have its own connection ID
-  // For now, we'll use the route ID as a fallback
-  const connectionId = route.id;
+  // Get the connection ID from the first step (or fallback to route ID)
+  const firstStep = route.steps[0];
+  const connectionId = firstStep?.connectionId || route.id;
+  
+  // Get vote stats for this connection
+  const stats = voteStats[connectionId] || { upvotes: 0, downvotes: 0 };
+  const userVote = userVotes[connectionId] || 0;
 
   return (
     <TouchableOpacity onPress={() => onPress(route)} activeOpacity={0.8}>
@@ -74,9 +81,9 @@ export default function RouteCard({
             <View style={styles.voteContainer}>
               <VoteButtons
                 connectionId={connectionId}
-                upvotes={0} // TODO: Fetch actual upvotes from API
-                downvotes={0} // TODO: Fetch actual downvotes from API
-                userVote={userVotes[connectionId] || 0}
+                upvotes={stats.upvotes}
+                downvotes={stats.downvotes}
+                userVote={userVote}
                 onVote={onVote}
                 size="small"
               />

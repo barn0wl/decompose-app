@@ -37,6 +37,7 @@ export interface RouteStep {
   price: number;
   duration: number;
   instructions: string;
+  connectionId?: string;
 }
 
 export interface CalculatedRoute {

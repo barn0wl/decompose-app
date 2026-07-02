@@ -148,20 +148,12 @@ export async function castVote(data: VoteInput): Promise<VoteResponse> {
   });
 }
 
-
-// TODO: make it so getvotestats returns the vote stats interface defined earlier
 export async function getVoteStats(
   connectionId: string,
   deviceId?: string
-): Promise<{
-  upvotes: number;
-  downvotes: number;
-  voteScore: number;
-  totalVotes: number;
-  userVote: 1 | -1 | 0;
-}> {
+): Promise<VoteStats> {
   const url = deviceId
     ? `/votes/${connectionId}?deviceId=${deviceId}`
     : `/votes/${connectionId}`;
-  return apiFetch(url);
+  return apiFetch<VoteStats>(url);
 }
