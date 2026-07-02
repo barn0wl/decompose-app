@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, FlatList, View } from 'react-native';
 import { Text, Appbar, Button, Card, Chip } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,7 +6,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import RouteCard from '../components/RouteCard';
 import { RootStackParamList, CalculatedRoute, SuggestedConnection } from '../types';
-import { getPendingSuggestions } from '../services/api';
+import { getPendingSuggestions, getVotesForConnections, castVote, VoteStats } from '../services/api';
 import { useDeviceId } from '../hooks/useDeviceId';
 import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
 
@@ -23,6 +23,8 @@ export default function ResultsScreen({ navigation, route }: Props) {
   const { originName, destinationName, optimizeBy, routes } = route.params;
   const [contextualSuggestions, setContextualSuggestions] = useState<SuggestedConnection[]>([]);
   const [showContextual, setShowContextual] = useState(false);
+  const [voteStats, setVoteStats] = useState<Record<string, VoteStats>>({});
+  const [isVoting, setIsVoting] = useState(false);
 
   // Fetch contextual suggestions based on the search
   useEffect(() => {
@@ -30,7 +32,6 @@ export default function ResultsScreen({ navigation, route }: Props) {
       if (!deviceId) return;
       try {
         const data = await getPendingSuggestions(deviceId);
-        // Show up to 2 suggestions that match the searched area
         const matching = data.suggestions.filter(s => 
           s.fromStop.commune === originName || 
           s.toStop.commune === destinationName ||
@@ -47,6 +48,22 @@ export default function ResultsScreen({ navigation, route }: Props) {
     fetchContextualSuggestions();
   }, [deviceId, originName, destinationName]);
 
+  // Fetch vote stats for all routes
+  useEffect(() => {
+    const fetchVoteStats = async () => {
+      if (!deviceId || routes.length === 0) return;
+      
+      try {
+        const connectionIds = routes.map(r => r.id);
+        const stats = await getVotesForConnections(connectionIds, deviceId);
+        setVoteStats(stats);
+      } catch {
+        // Silently fail - votes just won't show
+      }
+    };
+    fetchVoteStats();
+  }, [deviceId, routes]);
+
   const handleRoutePress = (selectedRoute: CalculatedRoute) => {
     navigation.navigate('RouteDetail', {
       selectedRoute,
@@ -54,6 +71,35 @@ export default function ResultsScreen({ navigation, route }: Props) {
       destinationName,
     });
   };
+
+  const handleVote = useCallback(async (connectionId: string, vote: 1 | -1) => {
+    if (!deviceId || isVoting) return;
+    
+    setIsVoting(true);
+    try {
+      const result = await castVote({
+        connectionId,
+        deviceId,
+        vote,
+      });
+      
+      // Update local vote stats
+      setVoteStats(prev => ({
+        ...prev,
+        [connectionId]: {
+          upvotes: result.connection.upvotes,
+          downvotes: result.connection.downvotes,
+          voteScore: result.voteScore,
+          totalVotes: result.totalVotes,
+          userVote: result.userVote,
+        }
+      }));
+    } catch (error) {
+      console.error('Vote failed:', error);
+    } finally {
+      setIsVoting(false);
+    }
+  }, [deviceId, isVoting]);
 
   const handleConfirmSuggestion = () => {
     navigation.navigate('PendingConfirmations');
@@ -134,13 +180,18 @@ export default function ResultsScreen({ navigation, route }: Props) {
       <FlatList
         data={routes}
         keyExtractor={item => item.id}
-        renderItem={({ item, index }) => (
-          <RouteCard
-            route={item}
-            onPress={handleRoutePress}
-            rank={index + 1}
-          />
-        )}
+        renderItem={({ item, index }) => {
+          const stats = voteStats[item.id];
+          return (
+            <RouteCard
+              route={item}
+              onPress={handleRoutePress}
+              onVote={handleVote}
+              rank={index + 1}
+              userVotes={stats ? { [item.id]: stats.userVote } : {}}
+            />
+          );
+        }}
         ListHeaderComponent={
           <>
             {renderHeader()}

@@ -109,6 +109,38 @@ export interface VoteResponse {
   connection: Connection;
 }
 
+export interface VoteStats {
+  upvotes: number;
+  downvotes: number;
+  voteScore: number;
+  totalVotes: number;
+  userVote: 1 | -1 | 0;
+}
+
+export async function getVotesForConnections(
+  connectionIds: string[],
+  deviceId?: string
+): Promise<Record<string, VoteStats>> {
+  if (connectionIds.length === 0) return {};
+  
+  // Fetch votes in parallel
+  const results = await Promise.all(
+    connectionIds.map(async (id) => {
+      try {
+        const stats = await getVoteStats(id, deviceId);
+        return [id, stats] as const;
+      } catch {
+        return [id, null] as const;
+      }
+    })
+  );
+  
+  return results.reduce((acc, [id, stats]) => {
+    if (stats) acc[id] = stats;
+    return acc;
+  }, {} as Record<string, VoteStats>);
+}
+
 export async function castVote(data: VoteInput): Promise<VoteResponse> {
   return apiFetch<VoteResponse>('/votes', {
     method: 'POST',
@@ -116,6 +148,8 @@ export async function castVote(data: VoteInput): Promise<VoteResponse> {
   });
 }
 
+
+// TODO: make it so getvotestats returns the vote stats interface defined earlier
 export async function getVoteStats(
   connectionId: string,
   deviceId?: string

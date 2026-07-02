@@ -11,6 +11,7 @@ export interface GraphEdge {
   instructions: string;
   fromZoneId?: string | null;
   toZoneId?: string | null;
+  connectionId?: string;
 }
 
 export interface RouteGraph {
@@ -112,7 +113,8 @@ export async function buildGraph(): Promise<RouteGraph> {
             conn.durationMinutes
           ),
           fromZoneId: conn.fromZoneId,
-          toZoneId: conn.toZoneId
+          toZoneId: conn.toZoneId,
+          connectionId: conn.id,
         };
 
         graph.get(fromId)!.push(edge);

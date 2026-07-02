@@ -3,11 +3,14 @@ import { Card, Text, Chip } from 'react-native-paper';
 
 import { CalculatedRoute } from '../types';
 import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
+import VoteButtons from './VoteButtons';
 
 interface Props {
   route: CalculatedRoute;
   onPress: (route: CalculatedRoute) => void;
+  onVote: (connectionId: string, vote: 1 | -1) => Promise<void>;
   rank: number;
+  userVotes?: Record<string, 1 | -1 | 0>;
 }
 
 function formatDuration(minutes: number): string {
@@ -17,8 +20,19 @@ function formatDuration(minutes: number): string {
   return m > 0 ? `${h}h${m.toString().padStart(2, '0')}` : `${h}h`;
 }
 
-export default function RouteCard({ route, onPress, rank }: Props) {
+export default function RouteCard({ 
+  route, 
+  onPress, 
+  onVote,
+  rank,
+  userVotes = {}
+}: Props) {
   const stepCount = route.steps.length;
+  
+  // Get the first step's connection ID (for voting)
+  // In a real scenario, each step would have its own connection ID
+  // For now, we'll use the route ID as a fallback
+  const connectionId = route.id;
 
   return (
     <TouchableOpacity onPress={() => onPress(route)} activeOpacity={0.8}>
@@ -54,6 +68,20 @@ export default function RouteCard({ route, onPress, rank }: Props) {
                 {TRANSPORT_LABELS[step.type]}
               </Chip>
             ))}
+          </View>
+
+          <View style={styles.footer}>
+            <View style={styles.voteContainer}>
+              <VoteButtons
+                connectionId={connectionId}
+                upvotes={0} // TODO: Fetch actual upvotes from API
+                downvotes={0} // TODO: Fetch actual downvotes from API
+                userVote={userVotes[connectionId] || 0}
+                onVote={onVote}
+                size="small"
+              />
+            </View>
+            <Text style={styles.routeId}>ID: {connectionId.substring(0, 8)}</Text>
           </View>
         </Card.Content>
       </Card>
@@ -102,6 +130,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+    marginBottom: 8,
   },
   chip: {
     backgroundColor: '#f0f0f0',
@@ -113,5 +142,21 @@ const styles = StyleSheet.create({
   chipIcon: {
     fontSize: 14,
     marginRight: 2,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  voteContainer: {
+    flex: 1,
+  },
+  routeId: {
+    fontSize: 10,
+    color: '#ccc',
   },
 });

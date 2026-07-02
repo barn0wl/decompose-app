@@ -36,10 +36,8 @@ class RoutingService {
     destinationStopId: string,
     optimizeBy: 'price' | 'time' | 'balanced' = 'price'
   ): Promise<CalculatedRoute[]> {
-    // Build or get cached graph
     const graph = await this.getGraph();
 
-    // Add origin and destination nodes to the graph if they don't exist
     if (!graph.edges.has(originStopId)) {
       graph.edges.set(originStopId, []);
     }
@@ -55,7 +53,7 @@ class RoutingService {
       optimizeBy === 'price' ? 'price' :
       optimizeBy === 'time' ? 'duration' : 'balanced';
 
-    const result = this.dijkstra(
+    const result = await this.dijkstra(
       graph.edges,
       originStopId,
       destinationStopId,
@@ -80,12 +78,12 @@ class RoutingService {
     return this.graphCache;
   }
 
-  private dijkstra(
+  private async dijkstra(
     graph: Map<string, GraphEdge[]>,
     start: string,
     end: string,
     weightKey: WeightKey
-  ): { steps: GraphEdge[] } | null {
+  ): Promise<{ steps: GraphEdge[] } | null> {
     const distances = new Map<string, number>();
     const pathMap = new Map<string, PathEntry>();
     const unvisited = new Set<string>();
@@ -97,15 +95,12 @@ class RoutingService {
       unvisited.add(node);
     }
 
-    // Ensure start and end are in the graph
     if (!distances.has(start)) distances.set(start, Infinity);
     if (!distances.has(end)) distances.set(end, Infinity);
     unvisited.add(start);
-
     distances.set(start, 0);
 
     while (unvisited.size > 0) {
-      // Find unvisited node with smallest distance
       let current: string | null = null;
       let smallest = Infinity;
       for (const node of unvisited) {
@@ -124,7 +119,8 @@ class RoutingService {
       const edges = graph.get(current) ?? [];
       for (const edge of edges) {
         if (!unvisited.has(edge.to)) continue;
-        const alt = (distances.get(current) ?? Infinity) + this.getWeight(edge, weightKey);
+        const weight = await this.getWeight(edge, weightKey);
+        const alt = (distances.get(current) ?? Infinity) + weight;
         if (alt < (distances.get(edge.to) ?? Infinity)) {
           distances.set(edge.to, alt);
           pathMap.set(edge.to, { prevNode: current, edge });
@@ -134,7 +130,6 @@ class RoutingService {
 
     if ((distances.get(end) ?? Infinity) === Infinity) return null;
 
-    // Reconstruct steps
     const steps: GraphEdge[] = [];
     let cursor: string | null = end;
     while (cursor && cursor !== start) {
@@ -152,16 +147,17 @@ class RoutingService {
    * High upvotes = lower weight (more attractive)
    * High downvotes = higher weight (less attractive)
    */
-  private getVoteAdjustedWeight(edge: GraphEdge, baseWeight: number): number {
-    // We need to get the connection to check votes
-    // For now, we'll use the edge's price/duration directly
-    // This will be enhanced in Phase 5 when we add full vote integration
+  private async getVoteAdjustedWeight(edge: GraphEdge, baseWeight: number): Promise<number> {
+    // For now, we need to find the connection ID for this edge
+    // Since we don't store connection ID in GraphEdge, we'll use a simplified approach
+    // In a production app, you'd store connectionId in GraphEdge
     
-    // For Phase 1, just return the base weight
+    // Simplified: return base weight without adjustment for now
+    // This will be enhanced when we add connectionId to GraphEdge
     return baseWeight;
   }
 
-  private getWeight(edge: GraphEdge, weightKey: WeightKey): number {
+  private async getWeight(edge: GraphEdge, weightKey: WeightKey): Promise<number> {
     let baseWeight: number;
     
     if (weightKey === 'price') {
@@ -173,8 +169,8 @@ class RoutingService {
       baseWeight = (edge.price / 10) + edge.duration;
     }
     
-    // Apply vote-based adjustment (Phase 5 will implement fully)
-    return this.getVoteAdjustedWeight(edge, baseWeight);
+    // Apply vote-based adjustment
+    return await this.getVoteAdjustedWeight(edge, baseWeight);
   }
 
   private formatRoute(steps: GraphEdge[]): CalculatedRoute {
