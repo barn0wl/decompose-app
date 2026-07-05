@@ -4,22 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import RouteStepItem from '../components/RouteStepItem';
+import RouteMap from '../components/RouteMap';
 import { RootStackParamList, CalculatedRoute } from '../types';
+import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RouteDetail'>;
-
-// Maps transport type to icon for the summary chips
-const TRANSPORT_ICONS: Record<string, string> = {
-  communal_taxi: '🚕',
-  gbaka: '🚌',
-  walking: '🚶',
-};
-
-const TRANSPORT_LABELS: Record<string, string> = {
-  communal_taxi: 'Taxi',
-  gbaka: 'Gbaka',
-  walking: 'À pied',
-};
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} min`;
@@ -28,7 +17,6 @@ function formatDuration(minutes: number): string {
   return m > 0 ? `${h}h${m.toString().padStart(2, '0')}` : `${h}h`;
 }
 
-// Get unique transport types used in the route
 function getUniqueTransportTypes(steps: CalculatedRoute['steps']): string[] {
   const seen = new Set<string>();
   const types: string[] = [];
@@ -44,7 +32,6 @@ function getUniqueTransportTypes(steps: CalculatedRoute['steps']): string[] {
 
 export default function RouteDetailScreen({ navigation, route }: Props) {
   const { selectedRoute, originName, destinationName } = route.params;
-
   const uniqueTransportTypes = getUniqueTransportTypes(selectedRoute.steps);
 
   const handleGoBack = () => {
@@ -60,8 +47,9 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <Appbar.Header>
         <Appbar.BackAction onPress={handleGoBack} />
-        <Appbar.Content 
+        <Appbar.Content
           title="Détail du trajet"
+          subtitle={`${originName} → ${destinationName}`}
         />
       </Appbar.Header>
 
@@ -110,6 +98,18 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
                 </View>
               </Card.Content>
             </Card>
+
+            {/* 🗺️ Route Map */}
+            <View style={styles.mapSection}>
+              <Text variant="labelSmall" style={styles.mapLabel}>
+                🗺️ Visualisation du trajet
+              </Text>
+              <RouteMap
+                steps={selectedRoute.steps}
+                height={250}
+                currentStepIndex={0}
+              />
+            </View>
 
             <Text variant="labelSmall" style={styles.stepsHeader}>
               Étapes du trajet
@@ -234,6 +234,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#444',
     fontWeight: '500',
+  },
+  mapSection: {
+    marginBottom: 16,
+  },
+  mapLabel: {
+    color: '#888',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginLeft: 4,
   },
   stepsHeader: {
     color: '#888',

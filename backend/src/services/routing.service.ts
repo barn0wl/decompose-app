@@ -218,6 +218,8 @@ class RoutingService {
         fromZone: s.fromZoneId || null,
         toZone: s.toZoneId || null,
         connectionId: s.connectionId,
+        // We need to fetch coordinates from the database
+        // This requires modifying GraphEdge to include coordinates
       }))
     };
   }

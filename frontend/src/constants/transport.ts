@@ -13,8 +13,8 @@ export const TRANSPORT_ICONS: Record<string, string> = {
 };
 
 export const TRANSPORT_COLORS: Record<string, string> = {
-  communal_taxi: '#FF9800',
-  gbaka: '#2196F3',
-  sotra_bus: '#4CAF50',
-  walking: '#9E9E9E',
+  communal_taxi: '#FF9800', // Orange
+  gbaka: '#2196F3', // Blue
+  sotra_bus: '#4CAF50', // Green
+  walking: '#9E9E9E', // Grey
 };

@@ -12,6 +12,11 @@ export interface GraphEdge {
   fromZoneId?: string | null;
   toZoneId?: string | null;
   connectionId?: string;
+  // Coordinates
+  fromLatitude?: number;
+  fromLongitude?: number;
+  toLatitude?: number;
+  toLongitude?: number;
 }
 
 export interface RouteGraph {
@@ -115,6 +120,11 @@ export async function buildGraph(): Promise<RouteGraph> {
           fromZoneId: conn.fromZoneId,
           toZoneId: conn.toZoneId,
           connectionId: conn.id,
+          // Add coordinates
+          fromLatitude: conn.fromStop?.latitude,
+          fromLongitude: conn.fromStop?.longitude,
+          toLatitude: conn.toStop?.latitude,
+          toLongitude: conn.toStop?.longitude,
         };
 
         graph.get(fromId)!.push(edge);

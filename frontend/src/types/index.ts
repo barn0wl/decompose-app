@@ -38,6 +38,11 @@ export interface RouteStep {
   duration: number;
   instructions: string;
   connectionId?: string;
+  // Coordinates for map visualization
+  fromLatitude?: number;
+  fromLongitude?: number;
+  toLatitude?: number;
+  toLongitude?: number;
 }
 
 export interface CalculatedRoute {
