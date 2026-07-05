@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useRef, useEffect, useState } from 'react';
+import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Polyline, Marker, Region } from 'react-native-maps';
 import { Text } from 'react-native-paper';
 
@@ -13,23 +13,29 @@ interface Props {
   height?: number | string;
 }
 
-export default function RouteMap({ steps, currentStepIndex = 0, height = 300 }: Props) {
+export default function RouteMap({ steps, currentStepIndex = 0, onStepSelect, height = 300 }: Props) {
   const mapRef = useRef<MapView>(null);
+  const [selectedStep, setSelectedStep] = useState<number>(currentStepIndex);
+
+  // Update selected step when prop changes
+  useEffect(() => {
+    setSelectedStep(currentStepIndex);
+  }, [currentStepIndex]);
 
   // Generate coordinates for the route from the steps data
   const coordinates = steps
     .map(step => {
-      // Use coordinates from the step data
       if (step.fromLatitude !== undefined && step.fromLongitude !== undefined) {
         return {
           latitude: step.fromLatitude,
           longitude: step.fromLongitude,
           title: step.from,
+          stepIndex: step.stepIndex ?? 0,
         };
       }
       return null;
     })
-    .filter((coord): coord is { latitude: number; longitude: number; title: string } => coord !== null);
+    .filter((coord): coord is { latitude: number; longitude: number; title: string; stepIndex: number } => coord !== null);
 
   // Add destination coordinates
   const lastStep = steps[steps.length - 1];
@@ -38,6 +44,7 @@ export default function RouteMap({ steps, currentStepIndex = 0, height = 300 }: 
       latitude: lastStep.toLatitude,
       longitude: lastStep.toLongitude,
       title: lastStep.to,
+      stepIndex: lastStep.stepIndex ?? steps.length - 1,
     });
   }
 
@@ -57,6 +64,7 @@ export default function RouteMap({ steps, currentStepIndex = 0, height = 300 }: 
       strokeWidth: 4,
       index,
       step,
+      isActive: index === selectedStep,
     };
   }).filter(polyline => polyline !== null);
 
@@ -71,7 +79,7 @@ export default function RouteMap({ steps, currentStepIndex = 0, height = 300 }: 
       const minLng = Math.min(...longitudes);
       const maxLng = Math.max(...longitudes);
       
-      const padding = 0.05; // 5% padding
+      const padding = 0.05;
       const region: Region = {
         latitude: (minLat + maxLat) / 2,
         longitude: (minLng + maxLng) / 2,
@@ -79,7 +87,6 @@ export default function RouteMap({ steps, currentStepIndex = 0, height = 300 }: 
         longitudeDelta: (maxLng - minLng) + padding,
       };
 
-      // Ensure minimum zoom level
       if (region.latitudeDelta < 0.01) region.latitudeDelta = 0.01;
       if (region.longitudeDelta < 0.01) region.longitudeDelta = 0.01;
 
@@ -87,12 +94,12 @@ export default function RouteMap({ steps, currentStepIndex = 0, height = 300 }: 
     }
   }, [coordinates]);
 
-  // Highlight current step
-  useEffect(() => {
-    // TODO: Highlight the current step with a different color/opacity
-    // For now, we just re-render the map
-    // Future enhancement: use animated polyline or step selection
-  }, [currentStepIndex]);
+  const handleStepPress = (index: number) => {
+    setSelectedStep(index);
+    if (onStepSelect) {
+      onStepSelect(index);
+    }
+  };
 
   if (coordinates.length === 0) {
     return (
@@ -131,7 +138,7 @@ export default function RouteMap({ steps, currentStepIndex = 0, height = 300 }: 
         {polylines.map((polyline, index) => {
           if (!polyline) return null;
           
-          const isActive = index === currentStepIndex;
+          const isActive = index === selectedStep;
           
           return (
             <Polyline
@@ -141,10 +148,7 @@ export default function RouteMap({ steps, currentStepIndex = 0, height = 300 }: 
               strokeWidth={isActive ? 6 : 4}
               lineDashPattern={polyline.step.type === 'walking' ? [5, 5] : undefined}
               tappable={true}
-              onPress={() => {
-                // TODO: Navigate to step or highlight it
-                console.log(`Step ${index + 1}: ${polyline.step.from} → ${polyline.step.to}`);
-              }}
+              onPress={() => handleStepPress(index)}
             />
           );
         })}
@@ -153,11 +157,13 @@ export default function RouteMap({ steps, currentStepIndex = 0, height = 300 }: 
         {coordinates.map((coord, index) => {
           const isOrigin = index === 0;
           const isDestination = index === coordinates.length - 1;
-          const stepIndex = index - 1; // Steps are between markers
+          const stepIndex = index - 1;
           
-          let markerColor = '#6200ee'; // Default purple
-          if (isOrigin) markerColor = '#4CAF50'; // Green for origin
-          else if (isDestination) markerColor = '#f44336'; // Red for destination
+          let markerColor = '#6200ee';
+          if (isOrigin) markerColor = '#4CAF50';
+          else if (isDestination) markerColor = '#f44336';
+          // Highlight the marker if it's the selected step's destination
+          else if (stepIndex === selectedStep) markerColor = '#FF6F00';
           
           return (
             <Marker
@@ -167,14 +173,22 @@ export default function RouteMap({ steps, currentStepIndex = 0, height = 300 }: 
                 longitude: coord.longitude,
               }}
               title={coord.title}
-              description={isOrigin ? 'Départ' : isDestination ? 'Arrivée' : `Étape ${stepIndex}`}
+              description={isOrigin ? 'Départ' : isDestination ? 'Arrivée' : `Étape ${stepIndex + 1}`}
               pinColor={markerColor}
             >
-              <View style={[styles.markerContainer, { backgroundColor: markerColor }]}>
-                <Text style={styles.markerText}>
-                  {isOrigin ? '🚀' : isDestination ? '🏁' : String(stepIndex + 1)}
-                </Text>
-              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  if (!isOrigin && !isDestination && stepIndex >= 0) {
+                    handleStepPress(stepIndex);
+                  }
+                }}
+              >
+                <View style={[styles.markerContainer, { backgroundColor: markerColor }]}>
+                  <Text style={styles.markerText}>
+                    {isOrigin ? '🚀' : isDestination ? '🏁' : String(stepIndex + 1)}
+                  </Text>
+                </View>
+              </TouchableOpacity>
             </Marker>
           );
         })}
@@ -184,7 +198,7 @@ export default function RouteMap({ steps, currentStepIndex = 0, height = 300 }: 
       {steps.length > 0 && (
         <View style={styles.stepIndicator}>
           <Text style={styles.stepIndicatorText}>
-            {currentStepIndex + 1} / {steps.length} étapes
+            {selectedStep + 1} / {steps.length} étapes
           </Text>
         </View>
       )}

@@ -6,7 +6,7 @@ import {
   confirmSuggestion,
   getPendingCount 
 } from '../controllers/suggestion.controller';
-import { castVote, getVoteStats } from '../controllers/vote.controller';
+import { castVote, getBulkVoteStats, getVoteStats } from '../controllers/vote.controller';
 import {
   getPendingSuggestions as adminGetPending,
   approveSuggestion,
@@ -63,6 +63,7 @@ router.get('/suggestions/pending/count', getPendingCount);
 
 router.post('/votes', castVote);
 router.get('/votes/:id', getVoteStats);
+router.get('/votes/bulk', getBulkVoteStats);
 
 // ─── Admin routes ─────────────────────────────────────────────────────
 

@@ -208,7 +208,7 @@ class RoutingService {
       id: `route_${Date.now()}`,
       totalPrice,
       totalDuration,
-      steps: steps.map(s => ({
+      steps: steps.map((s, index) => ({
         type: s.transportType,
         from: s.fromName,
         to: s.toName,
@@ -218,7 +218,7 @@ class RoutingService {
         fromZone: s.fromZoneId || null,
         toZone: s.toZoneId || null,
         connectionId: s.connectionId,
-        // Include coordinates from GraphEdge
+        stepIndex: index,
         fromLatitude: s.fromLatitude,
         fromLongitude: s.fromLongitude,
         toLatitude: s.toLatitude,

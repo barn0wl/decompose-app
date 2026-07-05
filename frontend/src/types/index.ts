@@ -38,6 +38,7 @@ export interface RouteStep {
   duration: number;
   instructions: string;
   connectionId?: string;
+  stepIndex?: number;
   // Coordinates for map visualization
   fromLatitude?: number;
   fromLongitude?: number;

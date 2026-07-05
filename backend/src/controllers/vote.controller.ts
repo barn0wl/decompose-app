@@ -82,3 +82,33 @@ export async function getVoteStats(req: Request, res: Response) {
     });
   }
 }
+
+/**
+ * Get vote stats for multiple connections in one request
+ * This is more efficient than fetching one by one
+ */
+export async function getBulkVoteStats(req: Request, res: Response) {
+  try {
+    const { connectionIds } = req.query;
+    const { deviceId } = req.query;
+
+    if (!connectionIds || typeof connectionIds !== 'string') {
+      return res.status(400).json({ error: 'connectionIds required as comma-separated string' });
+    }
+
+    const ids = connectionIds.split(',').filter(id => id.trim() !== '');
+    
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'At least one connection ID required' });
+    }
+
+    const stats = await voteService.getBulkVoteStats(ids, deviceId as string | undefined);
+    
+    res.json(stats);
+  } catch (error: any) {
+    console.error('Get bulk vote stats error:', error);
+    res.status(500).json({ 
+      error: error.message || 'Failed to get vote stats' 
+    });
+  }
+}

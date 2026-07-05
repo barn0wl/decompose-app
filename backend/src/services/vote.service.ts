@@ -115,6 +115,57 @@ export class VoteService {
     
     return userVote ? userVote.vote : 0;
   }
+
+  /**
+   * Get vote stats for multiple connections
+   * Returns a map of connectionId -> VoteStats
+   */
+  async getBulkVoteStats(connectionIds: string[], deviceId?: string) {
+    const connections = await prisma.connection.findMany({
+      where: {
+        id: { in: connectionIds },
+      },
+      select: {
+        id: true,
+        upvotes: true,
+        downvotes: true,
+        voteScore: true,
+        votedBy: true,
+      },
+    });
+
+    // Build stats for each connection
+    const statsMap: Record<string, {
+      upvotes: number;
+      downvotes: number;
+      voteScore: number;
+      totalVotes: number;
+      userVote: 1 | -1 | 0;
+    }> = {};
+
+    for (const conn of connections) {
+      const totalVotes = conn.upvotes + conn.downvotes;
+      let userVote: 1 | -1 | 0 = 0;
+
+      if (deviceId && conn.votedBy) {
+        const votedBy = conn.votedBy as any[];
+        const userVoteEntry = votedBy.find(v => v.deviceId === deviceId);
+        if (userVoteEntry) {
+          userVote = userVoteEntry.vote;
+        }
+      }
+
+      statsMap[conn.id] = {
+        upvotes: conn.upvotes,
+        downvotes: conn.downvotes,
+        voteScore: conn.voteScore,
+        totalVotes: totalVotes,
+        userVote,
+      };
+    }
+
+    return statsMap;
+  }
 }
 
 export const voteService = new VoteService();

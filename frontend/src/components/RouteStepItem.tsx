@@ -8,6 +8,12 @@ interface Props {
   index: number;
   isFirst: boolean;
   isLast: boolean;
+  voteStats?: {
+    upvotes: number;
+    downvotes: number;
+    voteScore: number;
+    totalVotes: number;
+  } | null;
 }
 
 function formatDuration(minutes: number): string {
@@ -17,7 +23,9 @@ function formatDuration(minutes: number): string {
   return m > 0 ? `${h}h${m.toString().padStart(2, '0')}` : `${h}h`;
 }
 
-export default function RouteStepItem({ step, index, isFirst, isLast }: Props) {
+export default function RouteStepItem({ step, index, isFirst, isLast, voteStats }: Props) {
+  const hasVotes = voteStats && voteStats.totalVotes > 0;
+  
   return (
     <View style={styles.container}>
       <View style={styles.connectorContainer}>
@@ -50,6 +58,30 @@ export default function RouteStepItem({ step, index, isFirst, isLast }: Props) {
             {step.instructions}
           </Text>
         </View>
+
+        {/* Vote stats for this step */}
+        {hasVotes && (
+          <View style={styles.voteStats}>
+            <View style={styles.voteStatItem}>
+              <Text style={styles.voteStatIcon}>👍</Text>
+              <Text style={styles.voteStatText}>{voteStats.upvotes}</Text>
+            </View>
+            <View style={styles.voteStatItem}>
+              <Text style={styles.voteStatIcon}>👎</Text>
+              <Text style={styles.voteStatText}>{voteStats.downvotes}</Text>
+            </View>
+            <View style={styles.voteStatItem}>
+              <Text style={[
+                styles.voteStatScore,
+                voteStats.voteScore > 0 && styles.positiveScore,
+                voteStats.voteScore < 0 && styles.negativeScore,
+              ]}>
+                {voteStats.voteScore > 0 ? '+' : ''}{voteStats.voteScore}
+              </Text>
+              <Text style={styles.voteStatLabel}>score</Text>
+            </View>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -145,5 +177,43 @@ const styles = StyleSheet.create({
   instructions: {
     color: '#666',
     fontStyle: 'italic',
+  },
+  voteStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  voteStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  voteStatIcon: {
+    fontSize: 12,
+  },
+  voteStatText: {
+    fontSize: 12,
+    color: '#555',
+    fontWeight: '500',
+  },
+  voteStatScore: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#555',
+  },
+  voteStatLabel: {
+    fontSize: 10,
+    color: '#888',
+    marginLeft: 1,
+  },
+  positiveScore: {
+    color: '#4CAF50',
+  },
+  negativeScore: {
+    color: '#f44336',
   },
 });

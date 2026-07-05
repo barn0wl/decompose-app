@@ -1,12 +1,15 @@
-import { StyleSheet, View, FlatList } from 'react-native';
+import { useState, useRef, useEffect } from 'react';
+import { StyleSheet, View, FlatList, ListRenderItemInfo } from 'react-native';
 import { Text, Appbar, Button, Card } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import RouteStepItem from '../components/RouteStepItem';
 import RouteMap from '../components/RouteMap';
-import { RootStackParamList, CalculatedRoute } from '../types';
+import { RootStackParamList, CalculatedRoute, RouteStep } from '../types';
 import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
+import { getBulkVoteStats, VoteStats } from '../services/api';
+import { useDeviceId } from '../hooks/useDeviceId';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RouteDetail'>;
 
@@ -31,8 +34,41 @@ function getUniqueTransportTypes(steps: CalculatedRoute['steps']): string[] {
 }
 
 export default function RouteDetailScreen({ navigation, route }: Props) {
+  const deviceId = useDeviceId();
   const { selectedRoute, originName, destinationName } = route.params;
   const uniqueTransportTypes = getUniqueTransportTypes(selectedRoute.steps);
+  const [stepVoteStats, setStepVoteStats] = useState<Record<string, VoteStats>>({});
+  const [loadingVotes, setLoadingVotes] = useState(false);
+  
+  // State for selected step
+  const [selectedStepIndex, setSelectedStepIndex] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
+
+  // Fetch vote stats for each step
+  useEffect(() => {
+    const fetchStepVotes = async () => {
+      if (!deviceId) return;
+      
+      // Collect all connection IDs from steps
+      const connectionIds = selectedRoute.steps
+        .map(s => s.connectionId)
+        .filter((id): id is string => !!id);
+      
+      if (connectionIds.length === 0) return;
+      
+      setLoadingVotes(true);
+      try {
+        const stats = await getBulkVoteStats(connectionIds, deviceId);
+        setStepVoteStats(stats);
+      } catch (error) {
+        console.error('Failed to fetch step vote stats:', error);
+      } finally {
+        setLoadingVotes(false);
+      }
+    };
+    
+    fetchStepVotes();
+  }, [deviceId, selectedRoute.steps]);
 
   const handleGoBack = () => {
     navigation.goBack();
@@ -41,6 +77,38 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
   const handleNewSearch = () => {
     navigation.popToTop();
     navigation.navigate('Home');
+  };
+
+  const handleStepSelect = (index: number) => {
+    setSelectedStepIndex(index);
+    // Scroll to the selected step in the list
+    flatListRef.current?.scrollToIndex({
+      index,
+      animated: true,
+      viewPosition: 0.5,
+    });
+  };
+
+  const renderStepItem = ({ item, index }: ListRenderItemInfo<RouteStep>) => {
+    const isActive = index === selectedStepIndex;
+    const stats = item.connectionId ? stepVoteStats[item.connectionId] : null;
+    
+    return (
+      <View style={[styles.stepWrapper, isActive && styles.activeStepWrapper]}>
+        <RouteStepItem
+          step={item}
+          index={index}
+          isFirst={index === 0}
+          isLast={index === selectedRoute.steps.length - 1}
+          voteStats={stats}
+        />
+        {isActive && (
+          <View style={styles.activeIndicator}>
+            <Text style={styles.activeIndicatorText}>📍 Current step</Text>
+          </View>
+        )}
+      </View>
+    );
   };
 
   return (
@@ -54,16 +122,10 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
       </Appbar.Header>
 
       <FlatList
+        ref={flatListRef}
         data={selectedRoute.steps}
         keyExtractor={(_, index) => `step-${index}`}
-        renderItem={({ item, index }) => (
-          <RouteStepItem
-            step={item}
-            index={index}
-            isFirst={index === 0}
-            isLast={index === selectedRoute.steps.length - 1}
-          />
-        )}
+        renderItem={renderStepItem}
         ListHeaderComponent={
           <View style={styles.headerContainer}>
             {/* Summary Card */}
@@ -107,7 +169,8 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
               <RouteMap
                 steps={selectedRoute.steps}
                 height={250}
-                currentStepIndex={0}
+                currentStepIndex={selectedStepIndex}
+                onStepSelect={handleStepSelect}
               />
             </View>
 
@@ -263,5 +326,27 @@ const styles = StyleSheet.create({
   },
   newSearchButtonContent: {
     paddingVertical: 6,
+  },
+  stepWrapper: {
+    position: 'relative',
+  },
+  activeStepWrapper: {
+    backgroundColor: 'rgba(98, 0, 238, 0.05)',
+    borderRadius: 10,
+    marginHorizontal: 16,
+  },
+  activeIndicator: {
+    position: 'absolute',
+    right: 24,
+    top: 12,
+    backgroundColor: '#6200ee',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  activeIndicatorText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
   },
 });

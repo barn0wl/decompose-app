@@ -157,3 +157,22 @@ export async function getVoteStats(
     : `/votes/${connectionId}`;
   return apiFetch<VoteStats>(url);
 }
+
+/**
+ * Get vote stats for multiple connections in one request
+ */
+export async function getBulkVoteStats(
+  connectionIds: string[],
+  deviceId?: string
+): Promise<Record<string, VoteStats>> {
+  if (connectionIds.length === 0) return {};
+  
+  const params = new URLSearchParams({
+    connectionIds: connectionIds.join(','),
+  });
+  if (deviceId) {
+    params.append('deviceId', deviceId);
+  }
+  
+  return apiFetch<Record<string, VoteStats>>(`/votes/bulk?${params.toString()}`);
+}
