@@ -3,17 +3,12 @@ import { Card, Text, Chip } from 'react-native-paper';
 
 import { CalculatedRoute } from '../types';
 import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
-import VoteButtons from './VoteButtons';
-
-// TODO: For multi-step routes, we could show votes for each step or average them
+import TrustIndicator from './TrustIndicator';
 
 interface Props {
   route: CalculatedRoute;
   onPress: (route: CalculatedRoute) => void;
-  onVote: (connectionId: string, vote: 1 | -1) => Promise<void>;
   rank: number;
-  userVotes?: Record<string, 1 | -1 | 0>;
-  voteStats?: Record<string, { upvotes: number; downvotes: number }>;
 }
 
 function formatDuration(minutes: number): string {
@@ -23,23 +18,9 @@ function formatDuration(minutes: number): string {
   return m > 0 ? `${h}h${m.toString().padStart(2, '0')}` : `${h}h`;
 }
 
-export default function RouteCard({
-  route,
-  onPress,
-  onVote,
-  rank,
-  userVotes = {},
-  voteStats = {}
-}: Props) {
+export default function RouteCard({ route, onPress, rank }: Props) {
   const stepCount = route.steps.length;
-  
-  // Get the connection ID from the first step (or fallback to route ID)
-  const firstStep = route.steps[0];
-  const connectionId = firstStep?.connectionId || route.id;
-  
-  // Get vote stats for this connection
-  const stats = voteStats[connectionId] || { upvotes: 0, downvotes: 0 };
-  const userVote = userVotes[connectionId] || 0;
+  const trustScore = route.trustScore;
 
   return (
     <TouchableOpacity onPress={() => onPress(route)} activeOpacity={0.8}>
@@ -77,19 +58,21 @@ export default function RouteCard({
             ))}
           </View>
 
-          <View style={styles.footer}>
-            <View style={styles.voteContainer}>
-              <VoteButtons
-                connectionId={connectionId}
-                upvotes={stats.upvotes}
-                downvotes={stats.downvotes}
-                userVote={userVote}
-                onVote={onVote}
+          {/* Trust Indicator */}
+          {trustScore && (
+            <View style={styles.footer}>
+              <TrustIndicator
+                score={trustScore.score}
+                totalVotes={trustScore.totalVotes}
                 size="small"
               />
+              {trustScore.stepCount > 0 && (
+                <Text style={styles.stepInfo}>
+                  {trustScore.stepCount} connection{trustScore.stepCount > 1 ? 's' : ''}
+                </Text>
+              )}
             </View>
-            <Text style={styles.routeId}>ID: {connectionId.substring(0, 8)}</Text>
-          </View>
+          )}
         </Card.Content>
       </Card>
     </TouchableOpacity>
@@ -159,11 +142,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
   },
-  voteContainer: {
-    flex: 1,
-  },
-  routeId: {
-    fontSize: 10,
-    color: '#ccc',
+  stepInfo: {
+    fontSize: 11,
+    color: '#888',
   },
 });

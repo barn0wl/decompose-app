@@ -226,6 +226,74 @@ class RoutingService {
       }))
     };
   }
+
+  /**
+   * Compute a trust score for a route based on vote stats of its connections
+   * Returns a score from 0-100 where:
+   * - 0: No votes or all negative
+   * - 50: Neutral
+   * - 100: All positive
+   */
+  async computeRouteTrustScore(route: CalculatedRoute): Promise<{
+    score: number;
+    totalVotes: number;
+    stepCount: number;
+    averageScore: number;
+  }> {
+    // Collect all connection IDs
+    const connectionIds = route.steps
+      .map(s => s.connectionId)
+      .filter((id): id is string => !!id);
+
+    if (connectionIds.length === 0) {
+      return {
+        score: 0,
+        totalVotes: 0,
+        stepCount: 0,
+        averageScore: 0,
+      };
+    }
+
+    // Fetch vote stats for all connections
+    const connections = await prisma.connection.findMany({
+      where: {
+        id: { in: connectionIds },
+      },
+      select: {
+        upvotes: true,
+        downvotes: true,
+        voteScore: true,
+      },
+    });
+
+    if (connections.length === 0) {
+      return {
+        score: 0,
+        totalVotes: 0,
+        stepCount: connectionIds.length,
+        averageScore: 0,
+      };
+    }
+
+    // Calculate aggregate stats
+    const totalUpvotes = connections.reduce((sum, c) => sum + c.upvotes, 0);
+    const totalDownvotes = connections.reduce((sum, c) => sum + c.downvotes, 0);
+    const totalVoteScore = connections.reduce((sum, c) => sum + c.voteScore, 0);
+    const totalVotes = totalUpvotes + totalDownvotes;
+    const averageScore = connections.length > 0 ? totalVoteScore / connections.length : 0;
+
+    // Normalize score to 0-100
+    // Max possible score per connection is roughly 100 (if 100 upvotes, 0 downvotes)
+    // We cap at 100 for display purposes
+    const normalizedScore = Math.min(Math.max((averageScore / 100) * 100, 0), 100);
+
+    return {
+      score: Math.round(normalizedScore),
+      totalVotes,
+      stepCount: connectionIds.length,
+      averageScore,
+    };
+  }
 }
 
 export const routingService = new RoutingService();

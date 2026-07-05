@@ -51,6 +51,12 @@ export interface CalculatedRoute {
   totalPrice: number;
   totalDuration: number;
   steps: RouteStep[];
+  trustScore?: {
+    score: number;      // 0-100
+    totalVotes: number;
+    stepCount: number;
+    averageScore: number;
+  };
 }
 
 export interface CalculateRouteResponse {

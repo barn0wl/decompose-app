@@ -30,26 +30,21 @@ export async function calculateRoute(req: Request, res: Response) {
       validated.optimizeBy
     );
 
+    // Calculate trust scores for each route
+    const routesWithScores = await Promise.all(
+      routes.map(async (route) => {
+        const trustScore = await routingService.computeRouteTrustScore(route);
+        return {
+          ...route,
+          trustScore,
+        };
+      })
+    );
+
     res.json({
-      origin: {
-        id: originStop.id,
-        name: originStop.name,
-        commune: originStop.commune,
-        zone: originStop.zone ? {
-          id: originStop.zone.id,
-          name: originStop.zone.name
-        } : null
-      },
-      destination: {
-        id: destinationStop.id,
-        name: destinationStop.name,
-        commune: destinationStop.commune,
-        zone: destinationStop.zone ? {
-          id: destinationStop.zone.id,
-          name: destinationStop.zone.name
-        } : null
-      },
-      routes,
+      origin: { id: originStop.id, name: originStop.name, commune: originStop.commune },
+      destination: { id: destinationStop.id, name: destinationStop.name, commune: destinationStop.commune },
+      routes: routesWithScores,
       optimizedFor: validated.optimizeBy
     });
 

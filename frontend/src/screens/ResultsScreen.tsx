@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { StyleSheet, FlatList, View } from 'react-native';
 import { Text, Appbar, Button, Card, Chip } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,7 +6,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import RouteCard from '../components/RouteCard';
 import { RootStackParamList, CalculatedRoute, SuggestedConnection } from '../types';
-import { getPendingSuggestions, getVotesForConnections, castVote, VoteStats } from '../services/api';
+import { getPendingSuggestions } from '../services/api';
 import { useDeviceId } from '../hooks/useDeviceId';
 import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
 
@@ -18,26 +18,11 @@ const OPTIMIZE_LABELS = {
   balanced: 'les plus équilibrés',
 };
 
-// Interface for aggregate route vote stats
-interface RouteVoteStats {
-  connectionId: string; // The primary connection ID (first step)
-  upvotes: number;
-  downvotes: number;
-  voteScore: number;
-  totalVotes: number;
-  userVote: 1 | -1 | 0;
-  averageScore: number; // Average of all step scores
-  stepCount: number;
-}
-
 export default function ResultsScreen({ navigation, route }: Props) {
   const deviceId = useDeviceId();
   const { originName, destinationName, optimizeBy, routes } = route.params;
   const [contextualSuggestions, setContextualSuggestions] = useState<SuggestedConnection[]>([]);
   const [showContextual, setShowContextual] = useState(false);
-  const [voteStats, setVoteStats] = useState<Record<string, VoteStats>>({});
-  const [routeAggregates, setRouteAggregates] = useState<Record<string, RouteVoteStats>>({});
-  const [isVoting, setIsVoting] = useState(false);
 
   // Fetch contextual suggestions based on the search
   useEffect(() => {
@@ -61,107 +46,6 @@ export default function ResultsScreen({ navigation, route }: Props) {
     fetchContextualSuggestions();
   }, [deviceId, originName, destinationName]);
 
-  // Fetch vote stats for all routes and compute aggregates
-  useEffect(() => {
-    const fetchVoteStats = async () => {
-      if (!deviceId || routes.length === 0) return;
-      
-      try {
-        // Collect all connection IDs from all steps of all routes
-        const connectionIds: string[] = [];
-        routes.forEach(route => {
-          route.steps.forEach(step => {
-            if (step.connectionId && !connectionIds.includes(step.connectionId)) {
-              connectionIds.push(step.connectionId);
-            }
-          });
-        });
-
-        if (connectionIds.length === 0) return;
-
-        const stats = await getVotesForConnections(connectionIds, deviceId);
-        setVoteStats(stats);
-
-        // Compute aggregate stats for each route
-        const aggregates: Record<string, RouteVoteStats> = {};
-        
-        routes.forEach(route => {
-          const stepConnectionIds = route.steps
-            .map(s => s.connectionId)
-            .filter((id): id is string => !!id);
-
-          if (stepConnectionIds.length === 0) {
-            // Fallback: use route ID
-            aggregates[route.id] = {
-              connectionId: route.id,
-              upvotes: 0,
-              downvotes: 0,
-              voteScore: 0,
-              totalVotes: 0,
-              userVote: 0,
-              averageScore: 0,
-              stepCount: 0,
-            };
-            return;
-          }
-
-          // Get stats for each step
-          const stepStats = stepConnectionIds.map(id => stats[id]).filter(Boolean);
-          
-          if (stepStats.length === 0) {
-            // No vote data available
-            aggregates[route.id] = {
-              connectionId: stepConnectionIds[0],
-              upvotes: 0,
-              downvotes: 0,
-              voteScore: 0,
-              totalVotes: 0,
-              userVote: 0,
-              averageScore: 0,
-              stepCount: stepConnectionIds.length,
-            };
-            return;
-          }
-
-          // Calculate aggregate stats
-          const totalUpvotes = stepStats.reduce((sum, s) => sum + s.upvotes, 0);
-          const totalDownvotes = stepStats.reduce((sum, s) => sum + s.downvotes, 0);
-          const totalVoteScore = stepStats.reduce((sum, s) => sum + s.voteScore, 0);
-          const totalVotes = stepStats.reduce((sum, s) => sum + s.totalVotes, 0);
-          
-          // Average score across all steps
-          const averageScore = stepStats.length > 0 
-            ? totalVoteScore / stepStats.length 
-            : 0;
-
-          // User vote: use the first step's user vote for simplicity
-          // TODO: Could also show user's aggregate vote
-          const userVote = stepStats[0]?.userVote || 0;
-
-          // Use the first step's connection ID as the primary ID for voting
-          const primaryConnectionId = stepConnectionIds[0];
-
-          aggregates[route.id] = {
-            connectionId: primaryConnectionId,
-            upvotes: totalUpvotes,
-            downvotes: totalDownvotes,
-            voteScore: totalVoteScore,
-            totalVotes: totalVotes,
-            userVote: userVote,
-            averageScore: averageScore,
-            stepCount: stepConnectionIds.length,
-          };
-        });
-
-        setRouteAggregates(aggregates);
-
-      } catch {
-        // Silently fail - votes just won't show
-      }
-    };
-    fetchVoteStats();
-  }, [deviceId, routes]);
-
   const handleRoutePress = (selectedRoute: CalculatedRoute) => {
     navigation.navigate('RouteDetail', {
       selectedRoute,
@@ -169,61 +53,6 @@ export default function ResultsScreen({ navigation, route }: Props) {
       destinationName,
     });
   };
-
-  const handleVote = useCallback(async (connectionId: string, vote: 1 | -1) => {
-    if (!deviceId || isVoting) return;
-
-    setIsVoting(true);
-    try {
-      const result = await castVote({
-        connectionId,
-        deviceId,
-        vote,
-      });
-
-      // Update local vote stats
-      setVoteStats(prev => ({
-        ...prev,
-        [connectionId]: {
-          upvotes: result.connection.upvotes,
-          downvotes: result.connection.downvotes,
-          voteScore: result.voteScore,
-          totalVotes: result.totalVotes,
-          userVote: result.userVote,
-        }
-      }));
-
-      // Update route aggregates (recalculate)
-      setRouteAggregates(prev => {
-        const updated = { ...prev };
-        // Find which route uses this connection ID
-        for (const [routeId, aggregate] of Object.entries(prev)) {
-          if (aggregate.connectionId === connectionId) {
-            // Update the aggregate for this route
-            // We need to recalculate based on all steps
-            // For simplicity, we'll just update the specific connection's contribution
-            // A full recalculation would require re-fetching all stats
-            // For now, we'll use the new stats from the API response
-            const newStats = result.connection;
-            updated[routeId] = {
-              ...aggregate,
-              upvotes: aggregate.upvotes + (newStats.upvotes - aggregate.upvotes),
-              downvotes: aggregate.downvotes + (newStats.downvotes - aggregate.downvotes),
-              voteScore: aggregate.voteScore + (newStats.voteScore - aggregate.voteScore),
-              totalVotes: aggregate.totalVotes + ((newStats.upvotes + newStats.downvotes) - aggregate.totalVotes),
-            };
-            break;
-          }
-        }
-        return updated;
-      });
-
-    } catch (error) {
-      console.error('Vote failed:', error);
-    } finally {
-      setIsVoting(false);
-    }
-  }, [deviceId, isVoting]);
 
   const handleConfirmSuggestion = () => {
     navigation.navigate('PendingConfirmations');
@@ -304,25 +133,13 @@ export default function ResultsScreen({ navigation, route }: Props) {
       <FlatList
         data={routes}
         keyExtractor={item => item.id}
-        renderItem={({ item, index }) => {
-          const aggregate = routeAggregates[item.id];
-          
-          return (
-            <RouteCard
-              route={item}
-              onPress={handleRoutePress}
-              onVote={handleVote}
-              rank={index + 1}
-              userVotes={aggregate ? { [aggregate.connectionId]: aggregate.userVote } : {}}
-              voteStats={aggregate ? { 
-                [aggregate.connectionId]: { 
-                  upvotes: aggregate.upvotes, 
-                  downvotes: aggregate.downvotes 
-                } 
-              } : {}}
-            />
-          );
-        }}
+        renderItem={({ item, index }) => (
+          <RouteCard
+            route={item}
+            onPress={handleRoutePress}
+            rank={index + 1}
+          />
+        )}
         ListHeaderComponent={
           <>
             {renderHeader()}
