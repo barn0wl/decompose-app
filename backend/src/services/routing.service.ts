@@ -77,8 +77,6 @@ class RoutingService {
     }
 
     const route = this.formatRoute(result.steps);
-    
-    // Compute trust score for the route
     const trustScore = await this.computeRouteTrustScore(route);
     
     return [{
@@ -159,8 +157,18 @@ class RoutingService {
     return { steps };
   }
 
+  /**
+   * Get vote-adjusted weight for an edge
+   * Walking connections (no connectionId) skip vote adjustment
+   */
   private async getVoteAdjustedWeight(edge: GraphEdge, baseWeight: number): Promise<number> {
+    // Walking connections don't have connectionId, skip vote adjustment
     if (!edge.connectionId) {
+      return baseWeight;
+    }
+
+    // Skip vote adjustment for walking connections even if they have connectionId
+    if (edge.transportType === TransportType.walking) {
       return baseWeight;
     }
 
@@ -232,6 +240,9 @@ class RoutingService {
    * - 0: No votes or all negative
    * - 50: Neutral
    * - 100: All positive
+   * 
+   * Walking connections are excluded from trust score calculation
+   * since they don't have votes.
    */
   async computeRouteTrustScore(route: CalculatedRoute): Promise<{
     score: number;
@@ -239,15 +250,20 @@ class RoutingService {
     stepCount: number;
     averageScore: number;
   }> {
-    const connectionIds = route.steps
+    // Filter out walking connections - they don't have votes
+    const nonWalkingSteps = route.steps.filter(step => step.type !== 'walking');
+    const connectionIds = nonWalkingSteps
       .map(s => s.connectionId)
       .filter((id): id is string => !!id);
+
+    const totalSteps = route.steps.length;
+    const nonWalkingCount = nonWalkingSteps.length;
 
     if (connectionIds.length === 0) {
       return {
         score: 0,
         totalVotes: 0,
-        stepCount: 0,
+        stepCount: totalSteps,
         averageScore: 0,
       };
     }
@@ -267,7 +283,7 @@ class RoutingService {
       return {
         score: 0,
         totalVotes: 0,
-        stepCount: connectionIds.length,
+        stepCount: totalSteps,
         averageScore: 0,
       };
     }
@@ -279,13 +295,12 @@ class RoutingService {
     const averageScore = connections.length > 0 ? totalVoteScore / connections.length : 0;
 
     // Normalize score to 0-100
-    // Max possible score per connection is roughly 100 (if 100 upvotes, 0 downvotes)
     const normalizedScore = Math.min(Math.max((averageScore / 100) * 100, 0), 100);
 
     return {
       score: Math.round(normalizedScore),
       totalVotes,
-      stepCount: connectionIds.length,
+      stepCount: totalSteps, // Include walking steps in count
       averageScore,
     };
   }

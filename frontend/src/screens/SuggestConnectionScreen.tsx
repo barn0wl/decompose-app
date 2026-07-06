@@ -25,7 +25,7 @@ import StopSearchInput from '../components/StopSearchInput';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SuggestConnection'>;
 
-type TransportType = 'communal_taxi' | 'gbaka' | 'sotra_bus' | 'walking';
+type TransportType = 'communal_taxi' | 'gbaka' | 'sotra_bus';
 
 export default function SuggestConnectionScreen({ navigation }: Props) {
   const deviceId = useDeviceId();
@@ -129,7 +129,6 @@ export default function SuggestConnectionScreen({ navigation }: Props) {
             { value: 'communal_taxi', label: `${TRANSPORT_ICONS.communal_taxi} Taxi` },
             { value: 'gbaka', label: `${TRANSPORT_ICONS.gbaka} Gbaka` },
             { value: 'sotra_bus', label: `${TRANSPORT_ICONS.sotra_bus} SOTRA` },
-            { value: 'walking', label: `${TRANSPORT_ICONS.walking} Walk` },
           ]}
         />
       </View>
