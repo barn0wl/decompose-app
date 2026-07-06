@@ -11,15 +11,14 @@ async function main() {
   console.log('🌱 Seeding database...');
 
   // Clean existing data (order matters due to foreign keys)
-  await prisma.suggestedConnection.deleteMany(); // clean suggestions first
+  await prisma.suggestedConnection.deleteMany();
   await prisma.connection.deleteMany();
   await prisma.stop.deleteMany();
   await prisma.zone.deleteMany();
 
   // ─── ZONES ────────────────────────────────────────────────────────────────
-  
   console.log('📍 Creating zones...');
-  
+
   const zones = await prisma.zone.createManyAndReturn({
     data: [
       {
@@ -47,10 +46,29 @@ async function main() {
         commune: 'Adjamé',
         description: 'Gbaka corridor through Adjamé',
       },
+      {
+        name: 'Cocody Taxi Zone',
+        commune: 'Cocody',
+        description: 'Communal taxi area covering Cocody',
+      },
+      {
+        name: 'Marcory Taxi Zone',
+        commune: 'Marcory',
+        description: 'Communal taxi area covering Marcory',
+      },
+      {
+        name: 'Port-Bouet Taxi Zone',
+        commune: 'Port-Bouet',
+        description: 'Communal taxi area covering Port-Bouet',
+      },
+      {
+        name: 'Grand-Bassam Taxi Zone',
+        commune: 'Grand-Bassam',
+        description: 'Communal taxi area covering Grand-Bassam',
+      },
     ],
   });
 
-  // Helper to find zone by name
   const z = (name: string) => {
     const zone = zones.find(z => z.name === name);
     if (!zone) throw new Error(`Zone not found: ${name}`);
@@ -58,25 +76,16 @@ async function main() {
   };
 
   // ─── STOPS ───────────────────────────────────────────────────────────────
-  
-  console.log('📍 Creating stops with zone assignments...');
+  console.log('📍 Creating stops with accurate coordinates...');
 
   const stops = await prisma.stop.createManyAndReturn({
     data: [
-      // Yopougon stops (Zone: Yopougon Taxi Zone)
-      {
-        name: 'Carrefour La Vie',
-        commune: 'Yopougon',
-        latitude: 5.3450,
-        longitude: -4.0700,
-        type: StopType.gbaka_station,
-        zoneId: z('Yopougon Taxi Zone'),
-      },
+      // Yopougon stops
       {
         name: 'Yopougon Toit Rouge',
         commune: 'Yopougon',
-        latitude: 5.3500,
-        longitude: -4.0800,
+        latitude: 5.349255236885707,
+        longitude: -4.077624034199311,
         type: StopType.taxi_stop,
         zoneId: z('Yopougon Taxi Zone'),
       },
@@ -88,7 +97,7 @@ async function main() {
         type: StopType.taxi_stop,
         zoneId: z('Yopougon Taxi Zone'),
       },
-      // Yopougon SOTRA stop
+      // Keeping as placeholder - may or may not exist
       {
         name: 'Yopougon SOTRA Terminus',
         commune: 'Yopougon',
@@ -98,24 +107,58 @@ async function main() {
         zoneId: z('Yopougon Taxi Zone'),
       },
 
-      // Koumassi stops (Zone: Koumassi Taxi Zone)
+      // Cocody stops
       {
-        name: 'Koumassi Remblai',
+        name: 'Carrefour La Vie',
+        commune: 'Cocody',
+        latitude: 5.348077183704681,
+        longitude: -4.003998932346861,
+        type: StopType.gbaka_station,
+        zoneId: z('Cocody Taxi Zone'),
+      },
+      {
+        name: 'Saint Jean',
+        commune: 'Cocody',
+        latitude: 5.335555307305185,
+        longitude: -4.003757711173526,
+        type: StopType.landmark,
+        zoneId: z('Cocody Taxi Zone'),
+      },
+      {
+        name: 'Carrefour 9 Kilos',
+        commune: 'Cocody',
+        latitude: 5.3580039615894774,
+        longitude: -3.96453951595039,
+        type: StopType.landmark,
+        zoneId: z('Cocody Taxi Zone'),
+      },
+      {
+        name: 'Angré Petro Ivoire',
+        commune: 'Cocody',
+        latitude: 5.404421098618564,
+        longitude: -3.9875821630349324,
+        type: StopType.landmark,
+        zoneId: z('Cocody Taxi Zone'),
+      },
+
+      // Koumassi stops
+      {
+        name: 'Koumassi Remblais',
         commune: 'Koumassi',
-        latitude: 5.3000,
-        longitude: -3.9800,
+        latitude: 5.300369987996002,
+        longitude: -3.964877905363696,
         type: StopType.taxi_stop,
         zoneId: z('Koumassi Taxi Zone'),
       },
       {
-        name: 'Koumassi Grand Carrefour',
+        name: 'Grand Carrefour de Koumassi',
         commune: 'Koumassi',
-        latitude: 5.3050,
-        longitude: -3.9750,
+        latitude: 5.288414191726205,
+        longitude: -3.970688947691688,
         type: StopType.gbaka_station,
         zoneId: z('Koumassi Taxi Zone'),
       },
-      // Koumassi SOTRA stop
+      // Keeping as placeholder
       {
         name: 'Koumassi SOTRA Terminus',
         commune: 'Koumassi',
@@ -125,7 +168,34 @@ async function main() {
         zoneId: z('Koumassi Taxi Zone'),
       },
 
-      // Treichville stops (Zone: Treichville Taxi Zone)
+      // Marcory stops
+      {
+        name: 'Grand Carrefour de Marcory',
+        commune: 'Marcory',
+        latitude: 5.300591519768063,
+        longitude: -3.9892050937243018,
+        type: StopType.gbaka_station,
+        zoneId: z('Marcory Taxi Zone'),
+      },
+
+      // Treichville stops
+      {
+        name: 'Gare de Bassam',
+        commune: 'Treichville',
+        latitude: 5.299815886012507,
+        longitude: -4.00247787838008,
+        type: StopType.gbaka_station,
+        zoneId: z('Treichville Taxi Zone'),
+      },
+      {
+        name: 'Grand Marché de Treichville',
+        commune: 'Treichville',
+        latitude: 5.309172264928636,
+        longitude: -4.013676734199663,
+        type: StopType.taxi_stop,
+        zoneId: z('Treichville Taxi Zone'),
+      },
+      // Keeping as placeholder
       {
         name: 'Treichville Gare Sud',
         commune: 'Treichville',
@@ -134,24 +204,17 @@ async function main() {
         type: StopType.gbaka_station,
         zoneId: z('Treichville Taxi Zone'),
       },
-      {
-        name: 'Treichville Marché',
-        commune: 'Treichville',
-        latitude: 5.2920,
-        longitude: -3.9870,
-        type: StopType.taxi_stop,
-        zoneId: z('Treichville Taxi Zone'),
-      },
 
-      // Adjamé stops (Zone: Adjamé Gbaka Corridor)
+      // Adjamé stops
       {
         name: 'Adjamé Liberté',
         commune: 'Adjamé',
-        latitude: 5.3600,
-        longitude: -4.0100,
+        latitude: 5.353515635393432,
+        longitude: -4.014971905363238,
         type: StopType.gbaka_station,
         zoneId: z('Adjamé Gbaka Corridor'),
       },
+      // Keeping as placeholder
       {
         name: 'Adjamé 220 Logements',
         commune: 'Adjamé',
@@ -161,7 +224,8 @@ async function main() {
         zoneId: z('Adjamé Gbaka Corridor'),
       },
 
-      // Plateau stops (Zone: Plateau Central Zone)
+      // Plateau stops
+      // Keeping as placeholder
       {
         name: 'Plateau Gare Nord',
         commune: 'Plateau',
@@ -170,7 +234,6 @@ async function main() {
         type: StopType.landmark,
         zoneId: z('Plateau Central Zone'),
       },
-      // Plateau SOTRA stop
       {
         name: 'Plateau SOTRA Terminus',
         commune: 'Plateau',
@@ -179,10 +242,29 @@ async function main() {
         type: StopType.landmark,
         zoneId: z('Plateau Central Zone'),
       },
+
+      // Port-Bouet stops
+      {
+        name: 'Rond-point d\'Anani',
+        commune: 'Port-Bouet',
+        latitude: 5.23614495894964,
+        longitude: -3.874810508986609,
+        type: StopType.landmark,
+        zoneId: z('Port-Bouet Taxi Zone'),
+      },
+
+      // Grand-Bassam stops
+      {
+        name: 'Gare Routière de Bassam',
+        commune: 'Grand-Bassam',
+        latitude: 5.206774494595144,
+        longitude: -3.7349442276523197,
+        type: StopType.gbaka_station,
+        zoneId: z('Grand-Bassam Taxi Zone'),
+      },
     ],
   });
 
-  // Helper to find stop by name
   const s = (name: string) => {
     const stop = stops.find(s => s.name === name);
     if (!stop) throw new Error(`Stop not found: ${name}`);
@@ -190,14 +272,11 @@ async function main() {
   };
 
   // ─── CONNECTIONS ─────────────────────────────────────────────────────────
-  
   console.log('📍 Creating connections...');
 
-  // Helper to create bidirectional connections
   const createBidirectional = (data: any[]) => {
     const connections: any[] = [];
     for (const item of data) {
-      // Forward direction
       connections.push({
         fromStopId: item.from,
         toStopId: item.to,
@@ -206,7 +285,6 @@ async function main() {
         durationMinutes: item.duration,
         routeDescription: item.description,
       });
-      // Reverse direction
       connections.push({
         fromStopId: item.to,
         toStopId: item.from,
@@ -219,132 +297,172 @@ async function main() {
     return connections;
   };
 
-  // ─── POINT-TO-POINT CONNECTIONS ─────────────────────────────────────────
+  // ─── REAL CONNECTIONS (from your knowledge) ────────────────────────────
 
-  const pointToPointConnections = createBidirectional([
-    // Koumassi ↔ Treichville (communal taxi)
+  const realConnections = createBidirectional([
+    // Gare de Bassam (Treichville) → Gare Routière de Bassam (Grand-Bassam)
     {
-      from: s('Koumassi Remblai'),
-      to: s('Treichville Gare Sud'),
-      type: TransportType.communal_taxi,
-      price: 200,
-      duration: 10,
-      description: 'Taxi Koumassi → Treichville Gare Sud',
-      reverseDescription: 'Taxi Treichville → Koumassi Remblai',
-    },
-    // Koumassi Grand Carrefour ↔ Adjamé (gbaka)
-    {
-      from: s('Koumassi Grand Carrefour'),
-      to: s('Adjamé Liberté'),
+      from: s('Gare de Bassam'),
+      to: s('Gare Routière de Bassam'),
       type: TransportType.gbaka,
-      price: 300,
-      duration: 25,
-      description: 'Gbaka Koumassi → Adjamé Liberté',
-      reverseDescription: 'Gbaka Adjamé → Koumassi Grand Carrefour',
+      price: 500,
+      duration: 90, // 1.5 hours
+      description: 'Gbaka from Treichville to Grand-Bassam',
+      reverseDescription: 'Gbaka from Grand-Bassam to Treichville',
     },
-    // Treichville ↔ Plateau (communal taxi)
+    // Gare de Bassam → Saint Jean
     {
-      from: s('Treichville Marché'),
-      to: s('Plateau Gare Nord'),
-      type: TransportType.communal_taxi,
-      price: 200,
-      duration: 12,
-      description: 'Taxi Treichville → Plateau',
-      reverseDescription: 'Taxi Plateau → Treichville',
+      from: s('Gare de Bassam'),
+      to: s('Saint Jean'),
+      type: TransportType.gbaka,
+      price: 500,
+      duration: 20,
+      description: 'Gbaka from Treichville to Saint Jean (Cocody)',
+      reverseDescription: 'Gbaka from Saint Jean (Cocody) to Treichville',
     },
-    // Plateau ↔ Adjamé (communal taxi)
+    // Gare de Bassam → Angré Petro Ivoire
     {
-      from: s('Plateau Gare Nord'),
+      from: s('Gare de Bassam'),
+      to: s('Angré Petro Ivoire'),
+      type: TransportType.gbaka,
+      price: 1000,
+      duration: 75, // 1h15
+      description: 'Gbaka from Treichville to Petro Ivoire (Cocody)',
+      reverseDescription: 'Gbaka from Petro Ivoire (Cocody) to Treichville',
+    },
+  ]);
+
+  await prisma.connection.createMany({
+    data: realConnections,
+  });
+
+  // ─── IMPROVISED CONNECTIONS ─────────────────────────────────────────────
+  console.log('📍 Creating improvised connections...');
+
+  const improvisedConnections = createBidirectional([
+    // Carrefour La Vie ↔ Adjamé Liberté
+    {
+      from: s('Carrefour La Vie'),
       to: s('Adjamé Liberté'),
-      type: TransportType.communal_taxi,
-      price: 200,
-      duration: 15,
-      description: 'Taxi Plateau → Adjamé',
-      reverseDescription: 'Taxi Adjamé → Plateau',
-    },
-    // Adjamé ↔ Yopougon (gbaka)
-    {
-      from: s('Adjamé Liberté'),
-      to: s('Carrefour La Vie'),
       type: TransportType.gbaka,
       price: 300,
       duration: 20,
-      description: 'Gbaka Adjamé → Carrefour La Vie (Yopougon)',
-      reverseDescription: 'Gbaka Carrefour La Vie → Adjamé',
+      description: 'Gbaka from Carrefour La Vie (Cocody) to Adjamé Liberté',
+      reverseDescription: 'Gbaka from Adjamé Liberté to Carrefour La Vie (Cocody)',
     },
-    // Adjamé ↔ Yopougon Marché (gbaka, alternative)
+    // Adjamé Liberté ↔ Grand Carrefour de Koumassi
     {
-      from: s('Adjamé 220 Logements'),
-      to: s('Yopougon Marché'),
+      from: s('Adjamé Liberté'),
+      to: s('Grand Carrefour de Koumassi'),
       type: TransportType.gbaka,
-      price: 250,
-      duration: 18,
-      description: 'Gbaka Adjamé 220 → Yopougon Marché',
-      reverseDescription: 'Gbaka Yopougon Marché → Adjamé 220',
+      price: 300,
+      duration: 25,
+      description: 'Gbaka from Adjamé Liberté to Grand Carrefour de Koumassi',
+      reverseDescription: 'Gbaka from Grand Carrefour de Koumassi to Adjamé Liberté',
     },
-    // Within Yopougon (communal taxi)
+    // Grand Carrefour de Koumassi ↔ Koumassi Remblais
     {
-      from: s('Carrefour La Vie'),
-      to: s('Yopougon Toit Rouge'),
-      type: TransportType.communal_taxi,
-      price: 200,
-      duration: 8,
-      description: 'Taxi Carrefour La Vie → Toit Rouge',
-      reverseDescription: 'Taxi Toit Rouge → Carrefour La Vie',
-    },
-    {
-      from: s('Yopougon Marché'),
-      to: s('Yopougon Toit Rouge'),
+      from: s('Grand Carrefour de Koumassi'),
+      to: s('Koumassi Remblais'),
       type: TransportType.communal_taxi,
       price: 200,
       duration: 10,
-      description: 'Taxi Yopougon Marché → Toit Rouge',
-      reverseDescription: 'Taxi Toit Rouge → Yopougon Marché',
+      description: 'Taxi from Grand Carrefour de Koumassi to Koumassi Remblais',
+      reverseDescription: 'Taxi from Koumassi Remblais to Grand Carrefour de Koumassi',
     },
-    // Walking connections
+    // Grand Marché de Treichville ↔ Gare de Bassam
     {
-      from: s('Koumassi Remblai'),
-      to: s('Koumassi Grand Carrefour'),
-      type: TransportType.walking,
-      price: 0,
-      duration: 5,
-      description: 'Walk from Koumassi Remblai to Grand Carrefour',
-      reverseDescription: 'Walk from Grand Carrefour to Koumassi Remblai',
+      from: s('Grand Marché de Treichville'),
+      to: s('Gare de Bassam'),
+      type: TransportType.communal_taxi,
+      price: 200,
+      duration: 10,
+      description: 'Taxi from Grand Marché de Treichville to Gare de Bassam',
+      reverseDescription: 'Taxi from Gare de Bassam to Grand Marché de Treichville',
     },
+    // Carrefour La Vie ↔ Saint Jean
     {
-      from: s('Treichville Gare Sud'),
-      to: s('Treichville Marché'),
-      type: TransportType.walking,
-      price: 0,
-      duration: 5,
-      description: 'Walk from Treichville Gare Sud to Marché',
-      reverseDescription: 'Walk from Marché to Treichville Gare Sud',
+      from: s('Carrefour La Vie'),
+      to: s('Saint Jean'),
+      type: TransportType.communal_taxi,
+      price: 250,
+      duration: 12,
+      description: 'Taxi from Carrefour La Vie to Saint Jean (Cocody)',
+      reverseDescription: 'Taxi from Saint Jean (Cocody) to Carrefour La Vie',
     },
+    // Saint Jean ↔ Plateau SOTRA Terminus
+    {
+      from: s('Saint Jean'),
+      to: s('Plateau SOTRA Terminus'),
+      type: TransportType.communal_taxi,
+      price: 300,
+      duration: 15,
+      description: 'Taxi from Saint Jean to Plateau',
+      reverseDescription: 'Taxi from Plateau to Saint Jean',
+    },
+    // Angré Petro Ivoire ↔ Carrefour 9 Kilos
+    {
+      from: s('Angré Petro Ivoire'),
+      to: s('Carrefour 9 Kilos'),
+      type: TransportType.communal_taxi,
+      price: 200,
+      duration: 10,
+      description: 'Taxi from Petro Ivoire to Carrefour 9 Kilos',
+      reverseDescription: 'Taxi from Carrefour 9 Kilos to Petro Ivoire',
+    },
+    // Adjamé Liberté ↔ Plateau SOTRA Terminus
     {
       from: s('Adjamé Liberté'),
-      to: s('Adjamé 220 Logements'),
-      type: TransportType.walking,
-      price: 0,
-      duration: 7,
-      description: 'Walk from Adjamé Liberté to 220 Logements',
-      reverseDescription: 'Walk from 220 Logements to Adjamé Liberté',
+      to: s('Plateau SOTRA Terminus'),
+      type: TransportType.communal_taxi,
+      price: 200,
+      duration: 15,
+      description: 'Taxi from Adjamé Liberté to Plateau',
+      reverseDescription: 'Taxi from Plateau to Adjamé Liberté',
     },
-
-    // ─── SOTRA BUS CONNECTIONS (NEW) ──────────────────────────────────
-    
-    // Yopougon SOTRA ↔ Plateau SOTRA
+    // Grand Carrefour de Marcory ↔ Gare de Bassam
     {
-      from: s('Yopougon SOTRA Terminus'),
+      from: s('Grand Carrefour de Marcory'),
+      to: s('Gare de Bassam'),
+      type: TransportType.communal_taxi,
+      price: 150,
+      duration: 8,
+      description: 'Taxi from Marcory to Gare de Bassam',
+      reverseDescription: 'Taxi from Gare de Bassam to Marcory',
+    },
+    // Rond-point d\'Anani ↔ Gare de Bassam
+    {
+      from: s('Rond-point d\'Anani'),
+      to: s('Gare de Bassam'),
+      type: TransportType.gbaka,
+      price: 400,
+      duration: 30,
+      description: 'Gbaka from Port-Bouet to Treichville',
+      reverseDescription: 'Gbaka from Treichville to Port-Bouet',
+    },
+  ]);
+
+  await prisma.connection.createMany({
+    data: improvisedConnections,
+  });
+
+  // ─── SOTRA BUS CONNECTIONS ──────────────────────────────────────────────
+  console.log('📍 Creating SOTRA bus connections...');
+
+  const sotraConnections = createBidirectional([
+    // Carrefour La Vie → Plateau SOTRA
+    {
+      from: s('Carrefour La Vie'),
       to: s('Plateau SOTRA Terminus'),
       type: TransportType.sotra_bus,
       price: 300,
-      duration: 35,
-      description: 'SOTRA bus from Yopougon to Plateau',
-      reverseDescription: 'SOTRA bus from Plateau to Yopougon',
+      duration: 30,
+      description: 'SOTRA bus from Carrefour La Vie to Plateau',
+      reverseDescription: 'SOTRA bus from Plateau to Carrefour La Vie',
     },
-    // Koumassi SOTRA ↔ Plateau SOTRA
+    // Grand Carrefour de Koumassi → Plateau SOTRA
     {
-      from: s('Koumassi SOTRA Terminus'),
+      from: s('Grand Carrefour de Koumassi'),
       to: s('Plateau SOTRA Terminus'),
       type: TransportType.sotra_bus,
       price: 250,
@@ -352,28 +470,27 @@ async function main() {
       description: 'SOTRA bus from Koumassi to Plateau',
       reverseDescription: 'SOTRA bus from Plateau to Koumassi',
     },
-    // Yopougon SOTRA ↔ Koumassi SOTRA
+    // Carrefour La Vie → Grand Carrefour de Koumassi
     {
-      from: s('Yopougon SOTRA Terminus'),
-      to: s('Koumassi SOTRA Terminus'),
+      from: s('Carrefour La Vie'),
+      to: s('Grand Carrefour de Koumassi'),
       type: TransportType.sotra_bus,
       price: 350,
-      duration: 40,
-      description: 'SOTRA bus from Yopougon to Koumassi',
-      reverseDescription: 'SOTRA bus from Koumassi to Yopougon',
+      duration: 35,
+      description: 'SOTRA bus from Cocody to Koumassi',
+      reverseDescription: 'SOTRA bus from Koumassi to Cocody',
     },
   ]);
 
   await prisma.connection.createMany({
-    data: pointToPointConnections,
+    data: sotraConnections,
   });
 
-  // ─── ZONE-BASED CONNECTIONS ──────────────────────────────────────────────
-
+  // ─── ZONE-BASED CONNECTIONS ─────────────────────────────────────────────
   console.log('📍 Creating zone-based connections...');
 
   const zoneConnections = [
-    // Zone-to-Zone: Yopougon Taxi Zone → Yopougon Taxi Zone
+    // Yopougon Taxi Zone → Yopougon Taxi Zone
     {
       fromZoneId: z('Yopougon Taxi Zone'),
       toZoneId: z('Yopougon Taxi Zone'),
@@ -382,7 +499,16 @@ async function main() {
       durationMinutes: 10,
       routeDescription: 'Taxi within Yopougon (any stop)',
     },
-    // Zone-to-Zone: Koumassi Taxi Zone → Koumassi Taxi Zone
+    // Cocody Taxi Zone → Cocody Taxi Zone
+    {
+      fromZoneId: z('Cocody Taxi Zone'),
+      toZoneId: z('Cocody Taxi Zone'),
+      transportType: TransportType.communal_taxi,
+      basePrice: 250,
+      durationMinutes: 12,
+      routeDescription: 'Taxi within Cocody (any stop)',
+    },
+    // Koumassi Taxi Zone → Koumassi Taxi Zone
     {
       fromZoneId: z('Koumassi Taxi Zone'),
       toZoneId: z('Koumassi Taxi Zone'),
@@ -391,7 +517,7 @@ async function main() {
       durationMinutes: 8,
       routeDescription: 'Taxi within Koumassi (any stop)',
     },
-    // Zone-to-Zone: Treichville Taxi Zone → Treichville Taxi Zone
+    // Treichville Taxi Zone → Treichville Taxi Zone
     {
       fromZoneId: z('Treichville Taxi Zone'),
       toZoneId: z('Treichville Taxi Zone'),
@@ -400,59 +526,32 @@ async function main() {
       durationMinutes: 8,
       routeDescription: 'Taxi within Treichville (any stop)',
     },
-    // Stop-to-Zone: Carrefour La Vie → Any stop in Yopougon Taxi Zone
-    {
-      fromStopId: s('Carrefour La Vie'),
-      toZoneId: z('Yopougon Taxi Zone'),
-      transportType: TransportType.communal_taxi,
-      basePrice: 200,
-      durationMinutes: 10,
-      routeDescription: 'Taxi from Carrefour La Vie to anywhere in Yopougon',
-    },
-    // Zone-to-Stop: Yopougon Taxi Zone → Carrefour La Vie
-    {
-      fromZoneId: z('Yopougon Taxi Zone'),
-      toStopId: s('Carrefour La Vie'),
-      transportType: TransportType.communal_taxi,
-      basePrice: 200,
-      durationMinutes: 10,
-      routeDescription: 'Taxi from anywhere in Yopougon to Carrefour La Vie',
-    },
-    // Zone-to-Stop: Adjamé Gbaka Corridor → Adjamé Liberté
+    // Adjamé Gbaka Corridor → Adjamé Gbaka Corridor
     {
       fromZoneId: z('Adjamé Gbaka Corridor'),
-      toStopId: s('Adjamé Liberté'),
-      transportType: TransportType.gbaka,
-      basePrice: 100,
-      durationMinutes: 5,
-      routeDescription: 'Gbaka from Adjamé corridor to Adjamé Liberté',
-    },
-    // Stop-to-Zone: Adjamé Liberté → Adjamé Gbaka Corridor
-    {
-      fromStopId: s('Adjamé Liberté'),
       toZoneId: z('Adjamé Gbaka Corridor'),
       transportType: TransportType.gbaka,
       basePrice: 100,
       durationMinutes: 5,
-      routeDescription: 'Gbaka from Adjamé Liberté to Adjamé corridor',
+      routeDescription: 'Gbaka within Adjamé corridor',
     },
-    // Zone-to-Stop: Adjamé Gbaka Corridor → Carrefour La Vie
-    {
-      fromZoneId: z('Adjamé Gbaka Corridor'),
-      toStopId: s('Carrefour La Vie'),
-      transportType: TransportType.gbaka,
-      basePrice: 350,
-      durationMinutes: 25,
-      routeDescription: 'Gbaka from Adjamé corridor to Carrefour La Vie (Yopougon)',
-    },
-    // Stop-to-Zone: Carrefour La Vie → Adjamé Gbaka Corridor
+    // Stop-to-Zone: Carrefour La Vie → Any stop in Cocody Taxi Zone
     {
       fromStopId: s('Carrefour La Vie'),
-      toZoneId: z('Adjamé Gbaka Corridor'),
-      transportType: TransportType.gbaka,
-      basePrice: 350,
-      durationMinutes: 25,
-      routeDescription: 'Gbaka from Carrefour La Vie (Yopougon) to Adjamé corridor',
+      toZoneId: z('Cocody Taxi Zone'),
+      transportType: TransportType.communal_taxi,
+      basePrice: 200,
+      durationMinutes: 10,
+      routeDescription: 'Taxi from Carrefour La Vie to anywhere in Cocody',
+    },
+    // Zone-to-Stop: Cocody Taxi Zone → Carrefour La Vie
+    {
+      fromZoneId: z('Cocody Taxi Zone'),
+      toStopId: s('Carrefour La Vie'),
+      transportType: TransportType.communal_taxi,
+      basePrice: 200,
+      durationMinutes: 10,
+      routeDescription: 'Taxi from anywhere in Cocody to Carrefour La Vie',
     },
   ];
 
@@ -460,25 +559,18 @@ async function main() {
     data: zoneConnections,
   });
 
-  // ─── SAMPLE SUGGESTIONS ──────────────────────────────────────────
+  // ─── SAMPLE SUGGESTIONS ──────────────────────────────────────────────────
+  console.log('📍 Creating sample suggestions...');
 
-  console.log('📍 Creating sample suggestions (for testing)...');
-
-  // Create 3 sample pending suggestions with different states
-  const deviceId1 = 'device-demo-001';
-  const deviceId2 = 'device-demo-002';
-  const deviceId3 = 'device-demo-003';
-
-  // Suggestion 1: Pending (0 confirmations)
   await prisma.suggestedConnection.create({
     data: {
       fromStopId: s('Yopougon Toit Rouge'),
-      toStopId: s('Treichville Marché'),
+      toStopId: s('Grand Marché de Treichville'),
       transportType: TransportType.communal_taxi,
       basePrice: 300,
       durationMinutes: 25,
-      routeDescription: 'Taxi Yopougon Toit Rouge → Treichville Marché (suggested)',
-      submittedBy: deviceId1,
+      routeDescription: 'Taxi Yopougon Toit Rouge → Grand Marché de Treichville (suggested)',
+      submittedBy: 'device-demo-001',
       status: 'pending',
       confirmations: 0,
       confirmationThreshold: 5,
@@ -486,63 +578,23 @@ async function main() {
     },
   });
 
-  // Suggestion 2: Pending (2 confirmations - close to approval)
   await prisma.suggestedConnection.create({
     data: {
-      fromStopId: s('Yopougon Marché'),
-      toStopId: s('Plateau SOTRA Terminus'),
-      transportType: TransportType.sotra_bus,
-      basePrice: 350,
-      durationMinutes: 40,
-      routeDescription: 'SOTRA bus from Yopougon Marché to Plateau (suggested)',
-      submittedBy: deviceId2,
+      fromStopId: s('Carrefour 9 Kilos'),
+      toStopId: s('Gare de Bassam'),
+      transportType: TransportType.gbaka,
+      basePrice: 400,
+      durationMinutes: 35,
+      routeDescription: 'Gbaka from Carrefour 9 Kilos to Gare de Bassam (suggested)',
+      submittedBy: 'device-demo-002',
       status: 'pending',
       confirmations: 2,
       confirmationThreshold: 5,
-      confirmedBy: [deviceId1, deviceId3],
+      confirmedBy: ['device-demo-001', 'device-demo-003'],
     },
   });
 
-  // Suggestion 3: Approved (already in system - for testing)
-  const approvedSuggestion = await prisma.suggestedConnection.create({
-    data: {
-      fromStopId: s('Yopougon Toit Rouge'),
-      toStopId: s('Adjamé 220 Logements'),
-      transportType: TransportType.gbaka,
-      basePrice: 250,
-      durationMinutes: 15,
-      routeDescription: 'Gbaka from Yopougon Toit Rouge to Adjamé 220 (approved)',
-      submittedBy: deviceId2,
-      status: 'approved',
-      confirmations: 5,
-      confirmationThreshold: 5,
-      confirmedBy: ['device-demo-001', 'device-demo-002', 'device-demo-003', 'device-demo-004', 'device-demo-005'],
-      approvedAt: new Date(),
-    },
-  });
-
-  // Also create the actual connection for the approved suggestion
-  await prisma.connection.create({
-    data: {
-      fromStopId: s('Yopougon Toit Rouge'),
-      toStopId: s('Adjamé 220 Logements'),
-      transportType: TransportType.gbaka,
-      basePrice: 250,
-      durationMinutes: 15,
-      routeDescription: 'Gbaka from Yopougon Toit Rouge to Adjamé 220 (community approved)',
-      upvotes: 3,
-      downvotes: 0,
-      voteScore: 3,
-      votedBy: [
-        { deviceId: 'device-demo-001', vote: 1 },
-        { deviceId: 'device-demo-002', vote: 1 },
-        { deviceId: 'device-demo-003', vote: 1 },
-      ],
-    },
-  });
-
-  // ─── SUMMARY ────────────────────────────────────────────────────────────
-
+  // ─── SUMMARY ─────────────────────────────────────────────────────────────
   const totalStops = await prisma.stop.count();
   const totalZones = await prisma.zone.count();
   const totalConnections = await prisma.connection.count();
@@ -551,19 +603,19 @@ async function main() {
   console.log(`✅ Seeded ${totalStops} stops`);
   console.log(`✅ Seeded ${totalZones} zones`);
   console.log(`✅ Seeded ${totalConnections} connections`);
-  console.log(`✅ Seeded ${totalSuggestions} suggestions (${await prisma.suggestedConnection.count({ where: { status: 'pending' } })} pending, ${await prisma.suggestedConnection.count({ where: { status: 'approved' } })} approved)`);
-  console.log('🎉 Done!');
+  console.log(`✅ Seeded ${totalSuggestions} suggestions`);
 
-  // Print sample data for testing
-  console.log('\n📋 Sample data for testing:');
-  console.log('Device IDs:');
-  console.log('  - demo-001 (submitter)');
-  console.log('  - demo-002 (submitter)');
-  console.log('  - demo-003 (confirmer)');
-  console.log('\nTest endpoints:');
-  console.log('  GET  /api/suggestions/pending?deviceId=demo-003');
-  console.log('  POST /api/suggestions/:id/confirm (body: { deviceId: "demo-003" })');
-  console.log('  POST /api/votes (body: { connectionId: "...", deviceId: "demo-003", vote: 1 })');
+  // Print stops for reference
+  console.log('\n📋 Stops seeded:');
+  const allStops = await prisma.stop.findMany({
+    select: { name: true, commune: true, latitude: true, longitude: true },
+    orderBy: { commune: 'asc' },
+  });
+  for (const stop of allStops) {
+    console.log(`  - ${stop.name} (${stop.commune})`);
+  }
+
+  console.log('\n🎉 Done!');
 }
 
 main()
@@ -574,3 +626,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+  

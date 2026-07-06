@@ -131,10 +131,25 @@ class RoutingService {
 
       unvisited.delete(current);
 
+      // Collect all connection IDs from the graph (excluding walking edges)
+      const allConnectionIds = new Set<string>();
+      for (const edges of graph.values()) {
+        for (const e of edges) {
+          if (e.connectionId) allConnectionIds.add(e.connectionId);
+        }
+      }
+
+      // Fetch all vote stats in one query
+      const voteStats = await prisma.connection.findMany({
+        where: { id: { in: [...allConnectionIds] } },
+        select: { id: true, upvotes: true, downvotes: true }
+      });
+      const voteStatsMap = new Map(voteStats.map(v => [v.id, { upvotes: v.upvotes, downvotes: v.downvotes }]));
+
       const edges = graph.get(current) ?? [];
       for (const edge of edges) {
         if (!unvisited.has(edge.to)) continue;
-        const weight = await this.getWeight(edge, weightKey);
+        const weight = await this.getWeight(edge, weightKey, voteStatsMap);
         const alt = (distances.get(current) ?? Infinity) + weight;
         if (alt < (distances.get(edge.to) ?? Infinity)) {
           distances.set(edge.to, alt);
@@ -161,41 +176,25 @@ class RoutingService {
    * Get vote-adjusted weight for an edge
    * Walking connections (no connectionId) skip vote adjustment
    */
-  private async getVoteAdjustedWeight(edge: GraphEdge, baseWeight: number): Promise<number> {
-    // Walking connections don't have connectionId, skip vote adjustment
-    if (!edge.connectionId) {
-      return baseWeight;
-    }
-
-    // Skip vote adjustment for walking connections even if they have connectionId
-    if (edge.transportType === TransportType.walking) {
-      return baseWeight;
-    }
-
-    const connection = await prisma.connection.findUnique({
-      where: { id: edge.connectionId },
-      select: {
-        upvotes: true,
-        downvotes: true,
-        voteScore: true,
-      }
-    });
-
-    if (!connection) {
-      return baseWeight;
-    }
-
-    const totalVotes = connection.upvotes + connection.downvotes;
-    if (totalVotes === 0) {
-      return baseWeight;
-    }
-
-    const confidence = (connection.upvotes - connection.downvotes) / totalVotes;
-    const modifier = 1 - (confidence * 0.5);
-    return baseWeight * modifier;
+  private async getVoteAdjustedWeight(
+    edge: GraphEdge,
+    baseWeight: number,
+    voteStatsMap: Map<string, { upvotes: number; downvotes: number }>
+  ): Promise<number> {
+    if (!edge.connectionId || edge.transportType === TransportType.walking) return baseWeight;
+    const stats = voteStatsMap.get(edge.connectionId);
+    if (!stats) return baseWeight;
+    const total = stats.upvotes + stats.downvotes;
+    if (total === 0) return baseWeight;
+    const confidence = (stats.upvotes - stats.downvotes) / total;
+    return baseWeight * (1 - confidence * 0.5);
   }
 
-  private async getWeight(edge: GraphEdge, weightKey: WeightKey): Promise<number> {
+  private async getWeight(
+    edge: GraphEdge,
+    weightKey: WeightKey,
+    voteStatsMap: Map<string, { upvotes: number; downvotes: number }>
+  ): Promise<number> {
     let baseWeight: number;
     if (weightKey === 'price') {
       baseWeight = edge.price;
@@ -204,7 +203,7 @@ class RoutingService {
     } else {
       baseWeight = (edge.price / 10) + edge.duration;
     }
-    return await this.getVoteAdjustedWeight(edge, baseWeight);
+    return this.getVoteAdjustedWeight(edge, baseWeight, voteStatsMap);
   }
 
   private formatRoute(steps: GraphEdge[]): CalculatedRoute {
