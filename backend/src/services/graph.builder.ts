@@ -32,7 +32,6 @@ export async function buildGraph(): Promise<RouteGraph> {
   const graph = new Map<string, GraphEdge[]>();
   const nodeNames = new Map<string, string>();
 
-  // Get all connections with their related stops and zones
   const connections = await prisma.connection.findMany({
     include: {
       fromStop: true,
@@ -52,15 +51,12 @@ export async function buildGraph(): Promise<RouteGraph> {
     let fromNodeNames: string[] = [];
     
     if (conn.fromStopId && conn.fromStop) {
-      // Single stop
       fromNodeIds = [conn.fromStopId];
       fromNodeNames = [conn.fromStop.name];
     } else if (conn.fromZoneId && conn.fromZone) {
-      // All stops in the zone
       fromNodeIds = conn.fromZone.stops.map(s => s.id);
       fromNodeNames = conn.fromZone.stops.map(s => s.name);
     } else {
-      // Invalid connection - skip
       continue;
     }
 
@@ -69,15 +65,12 @@ export async function buildGraph(): Promise<RouteGraph> {
     let toNodeNames: string[] = [];
     
     if (conn.toStopId && conn.toStop) {
-      // Single stop
       toNodeIds = [conn.toStopId];
       toNodeNames = [conn.toStop.name];
     } else if (conn.toZoneId && conn.toZone) {
-      // All stops in the zone
       toNodeIds = conn.toZone.stops.map(s => s.id);
       toNodeNames = conn.toZone.stops.map(s => s.name);
     } else {
-      // Invalid connection - skip
       continue;
     }
 
@@ -86,7 +79,6 @@ export async function buildGraph(): Promise<RouteGraph> {
       const fromId = fromNodeIds[i];
       const fromName = fromNodeNames[i];
 
-      // Store node name for later reference
       if (!nodeNames.has(fromId)) {
         nodeNames.set(fromId, fromName);
       }
@@ -99,7 +91,6 @@ export async function buildGraph(): Promise<RouteGraph> {
         const toId = toNodeIds[j];
         const toName = toNodeNames[j];
 
-        // Store node name for later reference
         if (!nodeNames.has(toId)) {
           nodeNames.set(toId, toName);
         }
@@ -120,7 +111,6 @@ export async function buildGraph(): Promise<RouteGraph> {
           fromZoneId: conn.fromZoneId,
           toZoneId: conn.toZoneId,
           connectionId: conn.id,
-          // Add coordinates
           fromLatitude: conn.fromStop?.latitude,
           fromLongitude: conn.fromStop?.longitude,
           toLatitude: conn.toStop?.latitude,

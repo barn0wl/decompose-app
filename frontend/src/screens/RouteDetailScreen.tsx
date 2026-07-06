@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, FlatList, ListRenderItemInfo } from 'react-native';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { StyleSheet, View, FlatList, ListRenderItemInfo, Alert } from 'react-native';
 import { Text, Appbar, Button, Card } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -8,7 +8,7 @@ import RouteStepItem from '../components/RouteStepItem';
 import RouteMap from '../components/RouteMap';
 import { RootStackParamList, CalculatedRoute, RouteStep } from '../types';
 import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
-import { getBulkVoteStats, VoteStats } from '../services/api';
+import { getBulkVoteStats, castVote, VoteStats } from '../services/api';
 import { useDeviceId } from '../hooks/useDeviceId';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RouteDetail'>;
@@ -39,8 +39,7 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
   const uniqueTransportTypes = getUniqueTransportTypes(selectedRoute.steps);
   const [stepVoteStats, setStepVoteStats] = useState<Record<string, VoteStats>>({});
   const [loadingVotes, setLoadingVotes] = useState(false);
-  
-  // State for selected step
+  const [isVoting, setIsVoting] = useState(false);
   const [selectedStepIndex, setSelectedStepIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
 
@@ -48,14 +47,11 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
   useEffect(() => {
     const fetchStepVotes = async () => {
       if (!deviceId) return;
-      
-      // Collect all connection IDs from steps
       const connectionIds = selectedRoute.steps
         .map(s => s.connectionId)
         .filter((id): id is string => !!id);
-      
       if (connectionIds.length === 0) return;
-      
+
       setLoadingVotes(true);
       try {
         const stats = await getBulkVoteStats(connectionIds, deviceId);
@@ -66,7 +62,6 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
         setLoadingVotes(false);
       }
     };
-    
     fetchStepVotes();
   }, [deviceId, selectedRoute.steps]);
 
@@ -81,7 +76,6 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
 
   const handleStepSelect = (index: number) => {
     setSelectedStepIndex(index);
-    // Scroll to the selected step in the list
     flatListRef.current?.scrollToIndex({
       index,
       animated: true,
@@ -89,10 +83,49 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
     });
   };
 
+  const handleVote = useCallback(async (connectionId: string, vote: 1 | -1) => {
+    if (!deviceId) {
+      Alert.alert('Error', 'Unable to identify device. Please try again.');
+      return;
+    }
+    
+    if (isVoting) return;
+    
+    setIsVoting(true);
+    try {
+      const result = await castVote({
+        connectionId,
+        deviceId,
+        vote,
+      });
+
+      // Update local vote stats
+      setStepVoteStats(prev => ({
+        ...prev,
+        [connectionId]: {
+          upvotes: result.connection.upvotes,
+          downvotes: result.connection.downvotes,
+          voteScore: result.voteScore,
+          totalVotes: result.totalVotes,
+          userVote: result.userVote,
+        }
+      }));
+
+      // Show feedback
+      const message = vote === 1 ? '⬆️ Upvoted!' : '⬇️ Downvoted!';
+      Alert.alert('Vote recorded', message);
+
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to cast vote. Please try again.');
+    } finally {
+      setIsVoting(false);
+    }
+  }, [deviceId, isVoting]);
+
   const renderStepItem = ({ item, index }: ListRenderItemInfo<RouteStep>) => {
     const isActive = index === selectedStepIndex;
     const stats = item.connectionId ? stepVoteStats[item.connectionId] : null;
-    
+
     return (
       <View style={[styles.stepWrapper, isActive && styles.activeStepWrapper]}>
         <RouteStepItem
@@ -101,6 +134,8 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
           isFirst={index === 0}
           isLast={index === selectedRoute.steps.length - 1}
           voteStats={stats}
+          onVote={handleVote}
+          isVoting={isVoting}
         />
         {isActive && (
           <View style={styles.activeIndicator}>
@@ -128,7 +163,6 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
         renderItem={renderStepItem}
         ListHeaderComponent={
           <View style={styles.headerContainer}>
-            {/* Summary Card */}
             <Card style={styles.summaryCard}>
               <Card.Content>
                 <View style={styles.summaryRow}>

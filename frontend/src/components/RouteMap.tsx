@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { StyleSheet, View, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, DimensionValue } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Polyline, Marker, Region } from 'react-native-maps';
 import { Text } from 'react-native-paper';
 
@@ -10,7 +10,7 @@ interface Props {
   steps: RouteStep[];
   currentStepIndex?: number;
   onStepSelect?: (index: number) => void;
-  height?: number | string;
+  height?: DimensionValue;
 }
 
 export default function RouteMap({ steps, currentStepIndex = 0, onStepSelect, height = 300 }: Props) {

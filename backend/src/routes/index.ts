@@ -56,14 +56,14 @@ router.get('/db-test', async (_req, res) => {
 
 router.post('/suggestions', createSuggestion);
 router.get('/suggestions/pending', getPendingSuggestions);
-router.post('/suggestions/:id/confirm', confirmSuggestion);
 router.get('/suggestions/pending/count', getPendingCount);
+router.post('/suggestions/:id/confirm', confirmSuggestion);
 
 // ─── Vote routes ──────────────────────────────────────────────────────
 
 router.post('/votes', castVote);
-router.get('/votes/:id', getVoteStats);
 router.get('/votes/bulk', getBulkVoteStats);
+router.get('/votes/:id', getVoteStats);
 
 // ─── Admin routes ─────────────────────────────────────────────────────
 

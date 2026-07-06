@@ -2,6 +2,7 @@ import { StyleSheet, View } from 'react-native';
 import { Text, Chip } from 'react-native-paper';
 import { RouteStep } from '../types';
 import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
+import VoteButtons from './VoteButtons';
 
 interface Props {
   step: RouteStep;
@@ -13,7 +14,10 @@ interface Props {
     downvotes: number;
     voteScore: number;
     totalVotes: number;
+    userVote?: 1 | -1 | 0;
   } | null;
+  onVote?: (connectionId: string, vote: 1 | -1) => Promise<void>;
+  isVoting?: boolean;
 }
 
 function formatDuration(minutes: number): string {
@@ -23,9 +27,19 @@ function formatDuration(minutes: number): string {
   return m > 0 ? `${h}h${m.toString().padStart(2, '0')}` : `${h}h`;
 }
 
-export default function RouteStepItem({ step, index, isFirst, isLast, voteStats }: Props) {
+export default function RouteStepItem({ 
+  step, 
+  index, 
+  isFirst, 
+  isLast, 
+  voteStats, 
+  onVote,
+  isVoting = false 
+}: Props) {
   const hasVotes = voteStats && voteStats.totalVotes > 0;
-  
+  const connectionId = step.connectionId;
+  const canVote = !!connectionId && !!onVote;
+
   return (
     <View style={styles.container}>
       <View style={styles.connectorContainer}>
@@ -59,29 +73,45 @@ export default function RouteStepItem({ step, index, isFirst, isLast, voteStats 
           </Text>
         </View>
 
-        {/* Vote stats for this step */}
-        {hasVotes && (
-          <View style={styles.voteStats}>
-            <View style={styles.voteStatItem}>
-              <Text style={styles.voteStatIcon}>👍</Text>
-              <Text style={styles.voteStatText}>{voteStats.upvotes}</Text>
+        {/* Vote stats and voting buttons */}
+        <View style={styles.voteSection}>
+          {hasVotes && (
+            <View style={styles.voteStats}>
+              <View style={styles.voteStatItem}>
+                <Text style={styles.voteStatIcon}>👍</Text>
+                <Text style={styles.voteStatText}>{voteStats.upvotes}</Text>
+              </View>
+              <View style={styles.voteStatItem}>
+                <Text style={styles.voteStatIcon}>👎</Text>
+                <Text style={styles.voteStatText}>{voteStats.downvotes}</Text>
+              </View>
+              <View style={styles.voteStatItem}>
+                <Text style={[
+                  styles.voteStatScore,
+                  voteStats.voteScore > 0 && styles.positiveScore,
+                  voteStats.voteScore < 0 && styles.negativeScore,
+                ]}>
+                  {voteStats.voteScore > 0 ? '+' : ''}{voteStats.voteScore}
+                </Text>
+                <Text style={styles.voteStatLabel}>score</Text>
+              </View>
             </View>
-            <View style={styles.voteStatItem}>
-              <Text style={styles.voteStatIcon}>👎</Text>
-              <Text style={styles.voteStatText}>{voteStats.downvotes}</Text>
+          )}
+
+          {/* Vote buttons */}
+          {canVote && (
+            <View style={styles.voteButtonsContainer}>
+              <VoteButtons
+                connectionId={connectionId}
+                upvotes={voteStats?.upvotes || 0}
+                downvotes={voteStats?.downvotes || 0}
+                userVote={voteStats?.userVote || 0}
+                onVote={onVote}
+                size="small"
+              />
             </View>
-            <View style={styles.voteStatItem}>
-              <Text style={[
-                styles.voteStatScore,
-                voteStats.voteScore > 0 && styles.positiveScore,
-                voteStats.voteScore < 0 && styles.negativeScore,
-              ]}>
-                {voteStats.voteScore > 0 ? '+' : ''}{voteStats.voteScore}
-              </Text>
-              <Text style={styles.voteStatLabel}>score</Text>
-            </View>
-          </View>
-        )}
+          )}
+        </View>
       </View>
     </View>
   );
@@ -178,19 +208,24 @@ const styles = StyleSheet.create({
     color: '#666',
     fontStyle: 'italic',
   },
-  voteStats: {
+  voteSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    justifyContent: 'space-between',
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
   },
+  voteStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   voteStatItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
   },
   voteStatIcon: {
     fontSize: 12,
@@ -209,6 +244,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#888',
     marginLeft: 1,
+  },
+  voteButtonsContainer: {
+    marginLeft: 8,
   },
   positiveScore: {
     color: '#4CAF50',

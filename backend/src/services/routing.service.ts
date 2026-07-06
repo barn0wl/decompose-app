@@ -11,6 +11,12 @@ export interface RouteStep {
   instructions: string;
   fromZone?: string | null;
   toZone?: string | null;
+  connectionId?: string;
+  stepIndex?: number;
+  fromLatitude?: number;
+  fromLongitude?: number;
+  toLatitude?: number;
+  toLongitude?: number;
 }
 
 export interface CalculatedRoute {
@@ -18,6 +24,12 @@ export interface CalculatedRoute {
   totalPrice: number;
   totalDuration: number;
   steps: RouteStep[];
+  trustScore?: {
+    score: number;
+    totalVotes: number;
+    stepCount: number;
+    averageScore: number;
+  };
 }
 
 interface PathEntry {
@@ -65,11 +77,17 @@ class RoutingService {
     }
 
     const route = this.formatRoute(result.steps);
-    return [route];
+    
+    // Compute trust score for the route
+    const trustScore = await this.computeRouteTrustScore(route);
+    
+    return [{
+      ...route,
+      trustScore,
+    }];
   }
 
   private async getGraph(): Promise<RouteGraph> {
-    // Simple cache - rebuild if more than 5 minutes old
     const now = Date.now();
     if (!this.graphCache || (now - this.lastBuildTime) > 300000) {
       this.graphCache = await buildGraph();
@@ -88,7 +106,6 @@ class RoutingService {
     const pathMap = new Map<string, PathEntry>();
     const unvisited = new Set<string>();
 
-    // Initialize distances
     for (const node of graph.keys()) {
       distances.set(node, Infinity);
       pathMap.set(node, { prevNode: null, edge: null });
@@ -142,17 +159,11 @@ class RoutingService {
     return { steps };
   }
 
-  /**
-   * Calculate effective weight considering votes
-   * High upvotes = lower weight (more attractive)
-   * High downvotes = higher weight (less attractive)
-   */
   private async getVoteAdjustedWeight(edge: GraphEdge, baseWeight: number): Promise<number> {
     if (!edge.connectionId) {
       return baseWeight;
     }
-    
-    // Get connection with vote stats
+
     const connection = await prisma.connection.findUnique({
       where: { id: edge.connectionId },
       select: {
@@ -161,42 +172,30 @@ class RoutingService {
         voteScore: true,
       }
     });
-    
+
     if (!connection) {
       return baseWeight;
     }
-    
+
     const totalVotes = connection.upvotes + connection.downvotes;
-    
-    // If no votes, return base weight
     if (totalVotes === 0) {
       return baseWeight;
     }
-    
-    // Calculate confidence score from -1 to 1
+
     const confidence = (connection.upvotes - connection.downvotes) / totalVotes;
-    
-    // Apply confidence modifier
-    // confidence: 1 = perfect, 0 = neutral, -1 = terrible
-    // modifier: 0.5x (boost) to 1.5x (penalty)
     const modifier = 1 - (confidence * 0.5);
-    
     return baseWeight * modifier;
   }
 
   private async getWeight(edge: GraphEdge, weightKey: WeightKey): Promise<number> {
     let baseWeight: number;
-    
     if (weightKey === 'price') {
       baseWeight = edge.price;
     } else if (weightKey === 'duration') {
       baseWeight = edge.duration;
     } else {
-      // Balanced: normalize price and duration
       baseWeight = (edge.price / 10) + edge.duration;
     }
-    
-    // Apply vote-based adjustment
     return await this.getVoteAdjustedWeight(edge, baseWeight);
   }
 
@@ -240,7 +239,6 @@ class RoutingService {
     stepCount: number;
     averageScore: number;
   }> {
-    // Collect all connection IDs
     const connectionIds = route.steps
       .map(s => s.connectionId)
       .filter((id): id is string => !!id);
@@ -254,7 +252,6 @@ class RoutingService {
       };
     }
 
-    // Fetch vote stats for all connections
     const connections = await prisma.connection.findMany({
       where: {
         id: { in: connectionIds },
@@ -275,7 +272,6 @@ class RoutingService {
       };
     }
 
-    // Calculate aggregate stats
     const totalUpvotes = connections.reduce((sum, c) => sum + c.upvotes, 0);
     const totalDownvotes = connections.reduce((sum, c) => sum + c.downvotes, 0);
     const totalVoteScore = connections.reduce((sum, c) => sum + c.voteScore, 0);
@@ -284,7 +280,6 @@ class RoutingService {
 
     // Normalize score to 0-100
     // Max possible score per connection is roughly 100 (if 100 upvotes, 0 downvotes)
-    // We cap at 100 for display purposes
     const normalizedScore = Math.min(Math.max((averageScore / 100) * 100, 0), 100);
 
     return {
