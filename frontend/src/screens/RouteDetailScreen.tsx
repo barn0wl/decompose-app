@@ -83,6 +83,25 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
     });
   };
 
+  const handleScrollToIndexFailed = (info: {
+    index: number;
+    highestMeasuredFrameIndex: number;
+    averageItemLength: number;
+  }) => {
+    // Fallback: scroll to an estimated offset, then retry the precise scroll
+    flatListRef.current?.scrollToOffset({
+      offset: info.averageItemLength * info.index,
+      animated: true,
+    });
+    setTimeout(() => {
+      flatListRef.current?.scrollToIndex({
+        index: info.index,
+        animated: true,
+        viewPosition: 0.5,
+      });
+    }, 100);
+  };
+
   const handleVote = useCallback(async (connectionId: string, vote: 1 | -1) => {
     if (!deviceId) {
       Alert.alert('Error', 'Unable to identify device. Please try again.');
@@ -136,6 +155,7 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
           voteStats={stats}
           onVote={handleVote}
           isVoting={isVoting}
+          onPress={() => handleStepSelect(index)}
         />
         {isActive && (
           <View style={styles.activeIndicator}>
@@ -161,6 +181,7 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
         data={selectedRoute.steps}
         keyExtractor={(_, index) => `step-${index}`}
         renderItem={renderStepItem}
+        onScrollToIndexFailed={handleScrollToIndexFailed}
         ListHeaderComponent={
           <View style={styles.headerContainer}>
             <Card style={styles.summaryCard}>

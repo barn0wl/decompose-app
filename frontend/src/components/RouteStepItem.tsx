@@ -1,5 +1,5 @@
-import { StyleSheet, View } from 'react-native';
-import { Text, Chip } from 'react-native-paper';
+import { StyleSheet, View, TouchableOpacity } from 'react-native';
+import { Text } from 'react-native-paper';
 import { RouteStep } from '../types';
 import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
 import VoteButtons from './VoteButtons';
@@ -18,6 +18,7 @@ interface Props {
   } | null;
   onVote?: (connectionId: string, vote: 1 | -1) => Promise<void>;
   isVoting?: boolean;
+  onPress?: () => void;
 }
 
 function formatDuration(minutes: number): string {
@@ -27,21 +28,27 @@ function formatDuration(minutes: number): string {
   return m > 0 ? `${h}h${m.toString().padStart(2, '0')}` : `${h}h`;
 }
 
-export default function RouteStepItem({ 
-  step, 
-  index, 
-  isFirst, 
-  isLast, 
-  voteStats, 
+export default function RouteStepItem({
+  step,
+  index,
+  isFirst,
+  isLast,
+  voteStats,
   onVote,
-  isVoting = false 
+  isVoting = false,
+  onPress,
 }: Props) {
   const hasVotes = voteStats && voteStats.totalVotes > 0;
   const connectionId = step.connectionId;
   const canVote = !!connectionId && !!onVote;
 
   return (
-    <View style={styles.container}>
+    <TouchableOpacity
+      style={styles.container}
+      onPress={onPress}
+      activeOpacity={onPress ? 0.6 : 1}
+      disabled={!onPress}
+    >
       <View style={styles.connectorContainer}>
         {!isFirst && <View style={styles.connectorLine} />}
         <View style={styles.stepDot}>
@@ -73,7 +80,6 @@ export default function RouteStepItem({
           </Text>
         </View>
 
-        {/* Vote stats and voting buttons */}
         <View style={styles.voteSection}>
           {hasVotes && (
             <View style={styles.voteStats}>
@@ -86,19 +92,21 @@ export default function RouteStepItem({
                 <Text style={styles.voteStatText}>{voteStats.downvotes}</Text>
               </View>
               <View style={styles.voteStatItem}>
-                <Text style={[
-                  styles.voteStatScore,
-                  voteStats.voteScore > 0 && styles.positiveScore,
-                  voteStats.voteScore < 0 && styles.negativeScore,
-                ]}>
-                  {voteStats.voteScore > 0 ? '+' : ''}{voteStats.voteScore}
+                <Text
+                  style={[
+                    styles.voteStatScore,
+                    voteStats.voteScore > 0 && styles.positiveScore,
+                    voteStats.voteScore < 0 && styles.negativeScore,
+                  ]}
+                >
+                  {voteStats.voteScore > 0 ? '+' : ''}
+                  {voteStats.voteScore}
                 </Text>
                 <Text style={styles.voteStatLabel}>score</Text>
               </View>
             </View>
           )}
 
-          {/* Vote buttons */}
           {canVote && (
             <View style={styles.voteButtonsContainer}>
               <VoteButtons
@@ -113,7 +121,7 @@ export default function RouteStepItem({
           )}
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 

@@ -94,6 +94,44 @@ export default function RouteMap({ steps, currentStepIndex = 0, onStepSelect, he
     }
   }, [coordinates]);
 
+  const didMountRef = useRef(false);
+
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return; // skip on initial mount — full-route fit effect already handles it
+    }
+    if (!mapRef.current) return;
+
+    const step = steps[selectedStep];
+    if (
+      !step ||
+      step.fromLatitude === undefined ||
+      step.fromLongitude === undefined ||
+      step.toLatitude === undefined ||
+      step.toLongitude === undefined
+    ) {
+      return;
+    }
+
+    const lats = [step.fromLatitude, step.toLatitude];
+    const lngs = [step.fromLongitude, step.toLongitude];
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    const padding = 0.02;
+
+    const region: Region = {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max(maxLat - minLat + padding, 0.01),
+      longitudeDelta: Math.max(maxLng - minLng + padding, 0.01),
+    };
+
+    mapRef.current.animateToRegion(region, 500);
+  }, [selectedStep, steps]);
+
   const handleStepPress = (index: number) => {
     setSelectedStep(index);
     if (onStepSelect) {
@@ -158,27 +196,26 @@ export default function RouteMap({ steps, currentStepIndex = 0, onStepSelect, he
           const isOrigin = index === 0;
           const isDestination = index === coordinates.length - 1;
           const stepIndex = index - 1;
-          
           let markerColor = '#6200ee';
           if (isOrigin) markerColor = '#4CAF50';
           else if (isDestination) markerColor = '#f44336';
-          // Highlight the marker if it's the selected step's destination
           else if (stepIndex === selectedStep) markerColor = '#FF6F00';
-          
+
           return (
             <Marker
               key={index}
-              coordinate={{
-                latitude: coord.latitude,
-                longitude: coord.longitude,
-              }}
+              coordinate={{ latitude: coord.latitude, longitude: coord.longitude }}
               title={coord.title}
               description={isOrigin ? 'Départ' : isDestination ? 'Arrivée' : `Étape ${stepIndex + 1}`}
               pinColor={markerColor}
             >
               <TouchableOpacity
                 onPress={() => {
-                  if (!isOrigin && !isDestination && stepIndex >= 0) {
+                  if (isOrigin) {
+                    handleStepPress(0);
+                  } else if (isDestination) {
+                    handleStepPress(steps.length - 1);
+                  } else if (stepIndex >= 0) {
                     handleStepPress(stepIndex);
                   }
                 }}
