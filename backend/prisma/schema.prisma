@@ -44,6 +44,9 @@ model Stop {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // PostGIS geometry column
+  geom      String?  @db.Text
+
   connectionsFrom Connection[] @relation("FromStop")
   connectionsTo   Connection[] @relation("ToStop")
   
@@ -61,9 +64,27 @@ model Zone {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // PostGIS geometry column
+  geom        String?  @db.Text
+
   stops           Stop[]
   connectionsFrom Connection[] @relation("FromZone")
   connectionsTo   Connection[] @relation("ToZone")
+}
+
+model Vote {
+  id           String   @id @default(uuid())
+  connectionId String
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  deviceId     String
+  vote         Int      @db.SmallInt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([connectionId, deviceId])
+  @@index([deviceId])
+  @@index([connectionId])
+  @@index([createdAt])
 }
 
 model Connection {
@@ -89,11 +110,12 @@ model Connection {
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
-  // ─── Vote Tracking  ──────────────────────────────────────────────
-  upvotes         Int    @default(0)
-  downvotes       Int    @default(0)
-  voteScore       Int    @default(0)
-  votedBy         Json?  // Array of { deviceId: string, vote: 1|-1 }
+  // ─── Vote Tracking ──────────────────────────────────────────────
+  upvotes          Int    @default(0)
+  downvotes        Int    @default(0)
+  voteScore        Int    @default(0)
+
+  votes Vote[]
 }
 
 // ─── SUGGESTED CONNECTION  ────────────────────────────────────────
