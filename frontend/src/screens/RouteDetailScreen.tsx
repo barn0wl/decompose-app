@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { StyleSheet, View, FlatList, ListRenderItemInfo, Alert } from 'react-native';
-import { Text, Appbar, Button, Card } from 'react-native-paper';
+import { Text, Appbar, Button, Card, Badge } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -42,6 +42,27 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
   const [isVoting, setIsVoting] = useState(false);
   const [selectedStepIndex, setSelectedStepIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
+
+  // Determine route comparison status
+  const isFastest = selectedRoute.isFastest;
+  const isCheapest = selectedRoute.isCheapest;
+  const isBestBalanced = selectedRoute.isBestBalanced;
+  const hasComparisonBadge = isFastest || isCheapest || isBestBalanced;
+
+  // Get badge color based on status
+  const getBadgeColor = () => {
+    if (isFastest) return '#4CAF50';
+    if (isCheapest) return '#FF9800';
+    if (isBestBalanced) return '#6200ee';
+    return '#888';
+  };
+
+  const getBadgeText = () => {
+    if (isFastest) return '⚡ Fastest';
+    if (isCheapest) return '💰 Cheapest';
+    if (isBestBalanced) return '⚖️ Best Balance';
+    return '';
+  };
 
   // Fetch vote stats for each step
   useEffect(() => {
@@ -88,7 +109,6 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
     highestMeasuredFrameIndex: number;
     averageItemLength: number;
   }) => {
-    // Fallback: scroll to an estimated offset, then retry the precise scroll
     flatListRef.current?.scrollToOffset({
       offset: info.averageItemLength * info.index,
       animated: true,
@@ -107,9 +127,7 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
       Alert.alert('Error', 'Unable to identify device. Please try again.');
       return;
     }
-    
     if (isVoting) return;
-    
     setIsVoting(true);
     try {
       const result = await castVote({
@@ -118,7 +136,6 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
         vote,
       });
 
-      // Update local vote stats
       setStepVoteStats(prev => ({
         ...prev,
         [connectionId]: {
@@ -130,7 +147,6 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
         }
       }));
 
-      // Show feedback
       const message = vote === 1 ? '⬆️ Upvoted!' : '⬇️ Downvoted!';
       Alert.alert('Vote recorded', message);
 
@@ -186,6 +202,20 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
           <View style={styles.headerContainer}>
             <Card style={styles.summaryCard}>
               <Card.Content>
+                {/* Route Comparison Badge */}
+                {hasComparisonBadge && (
+                  <View style={styles.comparisonBadgeContainer}>
+                    <Badge
+                      style={[
+                        styles.comparisonBadge,
+                        { backgroundColor: getBadgeColor() }
+                      ]}
+                    >
+                      {getBadgeText()}
+                    </Badge>
+                  </View>
+                )}
+
                 <View style={styles.summaryRow}>
                   <View style={styles.priceContainer}>
                     <Text style={styles.priceLabel}>Total</Text>
@@ -274,6 +304,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
+  },
+  comparisonBadgeContainer: {
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  comparisonBadge: {
+    fontSize: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    height: 24,
+    color: '#fff',
+    fontWeight: '600',
   },
   summaryRow: {
     flexDirection: 'row',

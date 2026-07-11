@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, Button, SegmentedButtons, Appbar, Badge } from 'react-native-paper';
+import { Text, Button, SegmentedButtons, Appbar, Badge, Menu } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -15,13 +15,14 @@ type OptimizeBy = 'price' | 'time' | 'balanced';
 
 export default function HomeScreen({ navigation }: Props) {
   const deviceId = useDeviceId();
-  
   const [origin, setOrigin] = useState<Stop | null>(null);
   const [destination, setDestination] = useState<Stop | null>(null);
   const [optimizeBy, setOptimizeBy] = useState<OptimizeBy>('price');
+  const [routeLimit, setRouteLimit] = useState<number>(3); // Default to 3 routes
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
+  const [menuVisible, setMenuVisible] = useState(false);
 
   const canSearch = origin !== null && destination !== null && !isLoading;
 
@@ -50,7 +51,12 @@ export default function HomeScreen({ navigation }: Props) {
     setIsLoading(true);
 
     try {
-      const response = await calculateRoute(origin.id, destination.id, optimizeBy);
+      const response = await calculateRoute(
+        origin.id, 
+        destination.id, 
+        optimizeBy,
+        routeLimit // Pass the route limit
+      );
       navigation.navigate('Results', {
         originId: origin.id,
         originName: origin.name,
@@ -58,29 +64,41 @@ export default function HomeScreen({ navigation }: Props) {
         destinationName: destination.name,
         optimizeBy,
         routes: response.routes,
+        routeLimit, // Pass the limit so Results can show context
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Une erreur est survenue. Réessaie.');
     } finally {
       setIsLoading(false);
     }
-  }, [origin, destination, optimizeBy, navigation]);
+  }, [origin, destination, optimizeBy, routeLimit, navigation]);
 
   const handleSuggestRoute = () => {
     navigation.navigate('SuggestConnection');
   };
 
+  const getRouteLimitLabel = (limit: number): string => {
+    const labels: Record<number, string> = {
+      1: '1 route',
+      2: '2 routes',
+      3: '3 routes',
+      4: '4 routes',
+      5: '5 routes',
+    };
+    return labels[limit] || `${limit} routes`;
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <Appbar.Header>
-        <Appbar.Content title="Décompose"/>
+        <Appbar.Content title="Décompose" />
         <Appbar.Action icon="plus-circle" onPress={handleSuggestRoute} />
       </Appbar.Header>
 
       {/* Pending Banner */}
       {pendingCount > 0 && (
-        <PendingBanner 
-          count={pendingCount} 
+        <PendingBanner
+          count={pendingCount}
           onPress={() => navigation.navigate('PendingConfirmations')}
         />
       )}
@@ -112,11 +130,48 @@ export default function HomeScreen({ navigation }: Props) {
             onValueChange={val => setOptimizeBy(val as OptimizeBy)}
             style={styles.segmented}
             buttons={[
-              { value: 'price', label: 'Prix' },
-              { value: 'time', label: 'Temps' },
-              { value: 'balanced', label: 'Équilibré' },
+              { value: 'price', label: '💰 Prix' },
+              { value: 'time', label: '⚡ Temps' },
+              { value: 'balanced', label: '⚖️ Équilibré' },
             ]}
           />
+
+          {/* Route Limit Selector */}
+          <View style={styles.limitContainer}>
+            <Text variant="labelMedium" style={styles.limitLabel}>
+              Nombre de trajets à afficher
+            </Text>
+            <Menu
+              visible={menuVisible}
+              onDismiss={() => setMenuVisible(false)}
+              anchor={
+                <Button
+                  mode="outlined"
+                  onPress={() => setMenuVisible(true)}
+                  style={styles.limitButton}
+                  contentStyle={styles.limitButtonContent}
+                  icon="chevron-down"
+                >
+                  {getRouteLimitLabel(routeLimit)}
+                </Button>
+              }
+            >
+              {[1, 2, 3, 4, 5].map((limit) => (
+                <Menu.Item
+                  key={limit}
+                  onPress={() => {
+                    setRouteLimit(limit);
+                    setMenuVisible(false);
+                  }}
+                  title={getRouteLimitLabel(limit)}
+                  leadingIcon={routeLimit === limit ? 'check' : undefined}
+                />
+              ))}
+            </Menu>
+            <Text variant="bodySmall" style={styles.limitHint}>
+              Plus de trajets = plus d'options, mais temps de calcul plus long
+            </Text>
+          </View>
 
           {error && (
             <Text style={styles.error}>{error}</Text>
@@ -168,13 +223,34 @@ const styles = StyleSheet.create({
   segmented: {
     marginTop: 4,
   },
+  limitContainer: {
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  limitLabel: {
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  limitButton: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    borderColor: '#6200ee',
+  },
+  limitButtonContent: {
+    paddingVertical: 4,
+  },
+  limitHint: {
+    color: '#888',
+    marginTop: 4,
+    fontSize: 11,
+  },
   error: {
     color: '#B00020',
     marginTop: 12,
     fontSize: 13,
   },
   button: {
-    marginTop: 28,
+    marginTop: 16,
     borderRadius: 8,
   },
   buttonContent: {

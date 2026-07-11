@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '../constants';
-import { Stop, CalculateRouteResponse, SuggestedConnection, Connection } from '../types';
+import { Stop, CalculateRouteResponse, SuggestedConnection, Connection, RouteStep } from '../types';
 
 // ─── Generic fetch wrapper ─────────────────────────────────────────────────────
 
@@ -33,14 +33,27 @@ export async function getAllStops(): Promise<Stop[]> {
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
+export interface CalculateRouteInput {
+  originStopId: string;
+  destinationStopId: string;
+  optimizeBy?: 'price' | 'time' | 'balanced';
+  limit?: number; // Max number of routes to return (1-5)
+}
+
 export async function calculateRoute(
   originStopId: string,
   destinationStopId: string,
-  optimizeBy: 'price' | 'time' | 'balanced' = 'price'
+  optimizeBy: 'price' | 'time' | 'balanced' = 'price',
+  limit: number = 1
 ): Promise<CalculateRouteResponse> {
   return apiFetch<CalculateRouteResponse>('/routes/calculate', {
     method: 'POST',
-    body: JSON.stringify({ originStopId, destinationStopId, optimizeBy }),
+    body: JSON.stringify({ 
+      originStopId, 
+      destinationStopId, 
+      optimizeBy,
+      limit: Math.min(Math.max(1, limit), 5) // Ensure between 1-5
+    }),
   });
 }
 
@@ -160,6 +173,7 @@ export async function getVoteStats(
 
 /**
  * Get vote stats for multiple connections in one request
+ * More efficient than fetching one by one
  */
 export async function getBulkVoteStats(
   connectionIds: string[],
