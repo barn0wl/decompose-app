@@ -6,31 +6,25 @@ import prisma from '../lib/prisma';
 
 export async function calculateRoute(req: Request, res: Response) {
   try {
-    // Validate input
     const validated = calculateRouteSchema.parse(req.body);
 
-    // Get stop details for response
     const originStop = await prisma.stop.findUnique({
       where: { id: validated.originStopId },
-      include: { zone: true }
     });
     const destinationStop = await prisma.stop.findUnique({
       where: { id: validated.destinationStopId },
-      include: { zone: true }
     });
 
     if (!originStop || !destinationStop) {
       return res.status(404).json({ error: 'Stop not found' });
     }
 
-    // Calculate route
     const routes = await routingService.calculateRoute(
       validated.originStopId,
       validated.destinationStopId,
       validated.optimizeBy
     );
 
-    // Calculate trust scores for each route
     const routesWithScores = await Promise.all(
       routes.map(async (route) => {
         const trustScore = await routingService.computeRouteTrustScore(route);
@@ -67,11 +61,9 @@ export async function calculateRoute(req: Request, res: Response) {
 export async function searchStops(req: Request, res: Response) {
   try {
     const { q } = req.query;
-    
     if (!q || typeof q !== 'string') {
       return res.status(400).json({ error: 'Search query required' });
     }
-    
     const stops = await prisma.stop.findMany({
       where: {
         OR: [
@@ -81,9 +73,7 @@ export async function searchStops(req: Request, res: Response) {
       },
       take: 10
     });
-    
     res.json({ stops });
-    
   } catch (error) {
     console.error('Search error:', error);
     res.status(500).json({ error: 'Failed to search stops' });

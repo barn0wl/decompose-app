@@ -5,16 +5,13 @@ import prisma from '../lib/prisma';
 function getParamId(req: Request): string {
   const id = req.params.id;
   if (Array.isArray(id)) {
-    return id[0]; // Take first element if it's an array
+    return id[0];
   }
   return id;
 }
 
 // ─── Suggestions ────────────────────────────────────────────────────────
 
-/**
- * Get all pending suggestions for admin review
- */
 export async function getPendingSuggestions(req: Request, res: Response) {
   try {
     const suggestions = await prisma.suggestedConnection.findMany({
@@ -32,14 +29,9 @@ export async function getPendingSuggestions(req: Request, res: Response) {
   }
 }
 
-/**
- * Approve a suggestion (admin override)
- * Unlike user confirmation, this instantly approves regardless of confirmation count
- */
 export async function approveSuggestion(req: Request, res: Response) {
   try {
     const id = getParamId(req);
-    
     const suggestion = await prisma.suggestedConnection.findUnique({
       where: { id },
       include: { fromStop: true, toStop: true },
@@ -50,14 +42,12 @@ export async function approveSuggestion(req: Request, res: Response) {
     }
 
     if (suggestion.status !== 'pending') {
-      return res.status(400).json({ 
-        error: `Suggestion is already ${suggestion.status}` 
+      return res.status(400).json({
+        error: `Suggestion is already ${suggestion.status}`
       });
     }
 
-    // Admin approval - create connection directly
     const connection = await prisma.$transaction(async (tx) => {
-      // Create the connection
       const newConnection = await tx.connection.create({
         data: {
           fromStopId: suggestion.fromStopId,
@@ -76,7 +66,6 @@ export async function approveSuggestion(req: Request, res: Response) {
         },
       });
 
-      // Update suggestion status
       await tx.suggestedConnection.update({
         where: { id: suggestion.id },
         data: {
@@ -95,15 +84,12 @@ export async function approveSuggestion(req: Request, res: Response) {
     });
   } catch (error) {
     console.error('Approve suggestion error:', error);
-    res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Failed to approve suggestion' 
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to approve suggestion'
     });
   }
 }
 
-/**
- * Reject a suggestion (admin)
- */
 export async function rejectSuggestion(req: Request, res: Response) {
   try {
     const id = getParamId(req);
@@ -118,8 +104,8 @@ export async function rejectSuggestion(req: Request, res: Response) {
     }
 
     if (suggestion.status !== 'pending') {
-      return res.status(400).json({ 
-        error: `Suggestion is already ${suggestion.status}` 
+      return res.status(400).json({
+        error: `Suggestion is already ${suggestion.status}`
       });
     }
 
@@ -140,25 +126,20 @@ export async function rejectSuggestion(req: Request, res: Response) {
     });
   } catch (error) {
     console.error('Reject suggestion error:', error);
-    res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Failed to reject suggestion' 
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to reject suggestion'
     });
   }
 }
 
 // ─── Connections (Admin) ───────────────────────────────────────────────
 
-/**
- * Get all connections with stop details
- */
 export async function getConnections(req: Request, res: Response) {
   try {
     const connections = await prisma.connection.findMany({
       include: {
         fromStop: true,
         toStop: true,
-        fromZone: true,
-        toZone: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -169,9 +150,6 @@ export async function getConnections(req: Request, res: Response) {
   }
 }
 
-/**
- * Delete a connection (admin)
- */
 export async function deleteConnection(req: Request, res: Response) {
   try {
     const id = getParamId(req);
@@ -194,21 +172,17 @@ export async function deleteConnection(req: Request, res: Response) {
     });
   } catch (error) {
     console.error('Delete connection error:', error);
-    res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Failed to delete connection' 
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to delete connection'
     });
   }
 }
 
 // ─── Stops (Admin) ──────────────────────────────────────────────────────
 
-/**
- * Get all stops
- */
 export async function getStops(req: Request, res: Response) {
   try {
     const stops = await prisma.stop.findMany({
-      include: { zone: true },
       orderBy: { name: 'asc' },
     });
     res.json(stops);
@@ -218,17 +192,13 @@ export async function getStops(req: Request, res: Response) {
   }
 }
 
-/**
- * Create a new stop (admin)
- */
 export async function createStop(req: Request, res: Response) {
   try {
-    const { name, commune, latitude, longitude, type, zoneId } = req.body;
+    const { name, commune, latitude, longitude, type } = req.body;
 
-    // Validate required fields
     if (!name || !commune || latitude === undefined || longitude === undefined || !type) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: name, commune, latitude, longitude, type' 
+      return res.status(400).json({
+        error: 'Missing required fields: name, commune, latitude, longitude, type'
       });
     }
 
@@ -239,27 +209,22 @@ export async function createStop(req: Request, res: Response) {
         latitude: parseFloat(latitude),
         longitude: parseFloat(longitude),
         type,
-        zoneId: zoneId || null,
       },
-      include: { zone: true },
     });
 
     res.status(201).json(stop);
   } catch (error) {
     console.error('Create stop error:', error);
-    res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Failed to create stop' 
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to create stop'
     });
   }
 }
 
-/**
- * Update a stop (admin)
- */
 export async function updateStop(req: Request, res: Response) {
   try {
     const id = getParamId(req);
-    const { name, commune, latitude, longitude, type, zoneId } = req.body;
+    const { name, commune, latitude, longitude, type } = req.body;
 
     const stop = await prisma.stop.findUnique({
       where: { id },
@@ -277,23 +242,18 @@ export async function updateStop(req: Request, res: Response) {
         latitude: latitude !== undefined ? parseFloat(latitude) : stop.latitude,
         longitude: longitude !== undefined ? parseFloat(longitude) : stop.longitude,
         type: type || stop.type,
-        zoneId: zoneId !== undefined ? zoneId : stop.zoneId,
       },
-      include: { zone: true },
     });
 
     res.json(updated);
   } catch (error) {
     console.error('Update stop error:', error);
-    res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Failed to update stop' 
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to update stop'
     });
   }
 }
 
-/**
- * Delete a stop (admin)
- */
 export async function deleteStop(req: Request, res: Response) {
   try {
     const id = getParamId(req);
@@ -312,10 +272,9 @@ export async function deleteStop(req: Request, res: Response) {
       return res.status(404).json({ error: 'Stop not found' });
     }
 
-    // Check if stop has related connections
     if (stop.connectionsFrom.length > 0 || stop.connectionsTo.length > 0) {
-      return res.status(400).json({ 
-        error: 'Cannot delete stop with existing connections. Delete connections first.' 
+      return res.status(400).json({
+        error: 'Cannot delete stop with existing connections. Delete connections first.'
       });
     }
 
@@ -329,8 +288,8 @@ export async function deleteStop(req: Request, res: Response) {
     });
   } catch (error) {
     console.error('Delete stop error:', error);
-    res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Failed to delete stop' 
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to delete stop'
     });
   }
 }

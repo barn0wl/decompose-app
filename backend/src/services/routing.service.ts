@@ -9,8 +9,6 @@ export interface RouteStep {
   price: number;
   duration: number;
   instructions: string;
-  fromZone?: string | null;
-  toZone?: string | null;
   connectionId?: string;
   stepIndex?: number;
   fromLatitude?: number;
@@ -30,7 +28,6 @@ export interface CalculatedRoute {
     stepCount: number;
     averageScore: number;
   };
-  // New fields for multi-route comparison
   rank?: number;
   isFastest?: boolean;
   isCheapest?: boolean;
@@ -56,11 +53,6 @@ class RoutingService {
 
   /**
    * Calculate route(s) between two stops
-   * @param originStopId - Starting stop ID
-   * @param destinationStopId - Ending stop ID
-   * @param optimizeBy - Optimization criteria ('price' | 'time' | 'balanced')
-   * @param limit - Maximum number of routes to return (default: 1, max: 5)
-   * @returns Array of calculated routes
    */
   async calculateRoute(
     originStopId: string,
@@ -97,9 +89,7 @@ class RoutingService {
 
     // Find routes
     let routes: GraphEdge[][];
-    
     if (routeLimit === 1) {
-      // Single route - use optimized Dijkstra
       const result = await this.dijkstra(
         graph.edges,
         originStopId,
@@ -109,7 +99,6 @@ class RoutingService {
       );
       routes = result ? [result.steps] : [];
     } else {
-      // Multiple routes - use Yen's algorithm
       routes = await this.yenAlgorithm(
         graph.edges,
         originStopId,
@@ -149,7 +138,6 @@ class RoutingService {
   private async fetchAllVoteStats(
     graph: RouteGraph
   ): Promise<Map<string, { upvotes: number; downvotes: number }>> {
-    // Collect all connection IDs from the graph (excluding walking edges)
     const allConnectionIds = new Set<string>();
     for (const edges of graph.edges.values()) {
       for (const e of edges) {
@@ -163,7 +151,6 @@ class RoutingService {
       return new Map();
     }
 
-    // Fetch all vote stats in one query
     const voteStats = await prisma.connection.findMany({
       where: {
         id: { in: [...allConnectionIds] },
@@ -217,7 +204,6 @@ class RoutingService {
 
   /**
    * Dijkstra's algorithm for shortest path
-   * Now accepts voteStatsMap to avoid per-edge database queries
    */
   private async dijkstra(
     graph: Map<string, GraphEdge[]>,
@@ -230,14 +216,12 @@ class RoutingService {
     const pathMap = new Map<string, PathEntry>();
     const unvisited = new Set<string>();
 
-    // Initialize distances
     for (const node of graph.keys()) {
       distances.set(node, Infinity);
       pathMap.set(node, { prevNode: null, edge: null });
       unvisited.add(node);
     }
 
-    // Ensure start and end are in the graph
     if (!distances.has(start)) {
       distances.set(start, Infinity);
       unvisited.add(start);
@@ -250,12 +234,11 @@ class RoutingService {
     distances.set(start, 0);
 
     let iterations = 0;
-    const maxIterations = graph.size * 2; // Safety limit
+    const maxIterations = graph.size * 2;
 
     while (unvisited.size > 0 && iterations < maxIterations) {
       iterations++;
 
-      // Find unvisited node with smallest distance
       let current: string | null = null;
       let smallest = Infinity;
       for (const node of unvisited) {
@@ -266,13 +249,11 @@ class RoutingService {
         }
       }
 
-      // If we reached the end or no reachable nodes, stop
       if (!current || current === end) break;
       if (smallest === Infinity) break;
 
       unvisited.delete(current);
 
-      // Explore edges from current node
       const edges = graph.get(current) ?? [];
       for (const edge of edges) {
         if (!unvisited.has(edge.to)) continue;
@@ -287,12 +268,10 @@ class RoutingService {
       }
     }
 
-    // Check if we found a path
     if ((distances.get(end) ?? Infinity) === Infinity) {
       return null;
     }
 
-    // Reconstruct path
     const steps: GraphEdge[] = [];
     let cursor: string | null = end;
     while (cursor && cursor !== start) {
@@ -302,7 +281,6 @@ class RoutingService {
       cursor = entry.prevNode;
     }
 
-    // Validate path
     if (steps.length === 0) {
       return null;
     }
@@ -312,7 +290,6 @@ class RoutingService {
 
   /**
    * Yen's algorithm for k-shortest loopless paths
-   * Returns up to K shortest paths between start and end
    */
   private async yenAlgorithm(
     graph: Map<string, GraphEdge[]>,
@@ -322,54 +299,37 @@ class RoutingService {
     K: number,
     voteStatsMap: Map<string, { upvotes: number; downvotes: number }>
   ): Promise<GraphEdge[][]> {
-    // Create a deep copy of the graph for safe mutation
     const workingGraph = this.cloneGraph(graph);
-    
-    // A[] = list of shortest paths
     const A: GraphEdge[][] = [];
-
-    // B[] = list of potential paths (priority queue)
     const B: { path: GraphEdge[]; cost: number; key: string }[] = [];
 
-    // Find the first shortest path
     const firstPath = await this.dijkstra(workingGraph, start, end, weightKey, voteStatsMap);
     if (!firstPath) {
       return A;
     }
     A.push(firstPath.steps);
 
-    // For k from 1 to K-1
     for (let k = 1; k < K; k++) {
       const prevPath = A[k - 1];
       
-      // For each node in the previous path except the last
       for (let i = 0; i < prevPath.length; i++) {
-        // Spur node = node at position i
         const spurNode = i === 0 ? start : prevPath[i - 1].to;
-        
-        // Root path = path from start to spur node
         const rootPath = prevPath.slice(0, i);
-        
-        // Track what we remove so we can restore
         const removedEdges: { from: string; to: string }[] = [];
         const removedNodes: Set<string> = new Set();
-        
-        // For each path in A that shares the same root path
+
         for (const path of A) {
-          // Check if this path shares the root path
           if (this.pathsShareRoot(path, rootPath, i)) {
-            // Remove the next edge from the graph
             const nextEdge = path[i];
             if (nextEdge) {
               const fromNode = i === 0 ? start : path[i - 1].to;
               const edges = workingGraph.get(fromNode) || [];
-              const edgeIndex = edges.findIndex(e => 
-                e.to === nextEdge.to && 
+              const edgeIndex = edges.findIndex(e =>
+                e.to === nextEdge.to &&
                 e.transportType === nextEdge.transportType &&
                 e.fromName === nextEdge.fromName &&
                 e.toName === nextEdge.toName
               );
-              
               if (edgeIndex !== -1) {
                 removedEdges.push({
                   from: fromNode,
@@ -380,23 +340,20 @@ class RoutingService {
             }
           }
         }
-        
-        // Remove root path nodes (except spur node) to avoid cycles
+
         const spurNodeId = i === 0 ? start : prevPath[i - 1].to;
         const rootPathNodes = new Set<string>();
         for (const edge of rootPath) {
           rootPathNodes.add(edge.to);
         }
-        
+
         for (const node of rootPathNodes) {
           if (node !== spurNodeId && node !== start) {
             removedNodes.add(node);
-            // Set edges to empty array
             workingGraph.set(node, []);
           }
         }
-        
-        // Find spur path
+
         const spurPath = await this.dijkstra(
           workingGraph,
           spurNode,
@@ -404,13 +361,11 @@ class RoutingService {
           weightKey,
           voteStatsMap
         );
-        
-        // Restore removed nodes (re-initialize with empty array)
+
         for (const node of removedNodes) {
           workingGraph.set(node, []);
         }
-        
-        // Restore removed edges
+
         for (const { from, to } of removedEdges) {
           const originalEdges = graph.get(from) || [];
           const edgeToRestore = originalEdges.find(e => e.to === to);
@@ -422,16 +377,13 @@ class RoutingService {
             }
           }
         }
-        
+
         if (spurPath) {
-          // Total path = rootPath + spurPath
           const totalPath = [...rootPath, ...spurPath.steps];
-          
-          // Check if path already exists
           const pathKey = this.getPathKey(totalPath);
           const isDuplicate = A.some(p => this.getPathKey(p) === pathKey) ||
                             B.some(p => p.key === pathKey);
-          
+
           if (!isDuplicate) {
             const totalCost = await this.calculatePathCost(totalPath, weightKey, voteStatsMap);
             B.push({
@@ -442,21 +394,17 @@ class RoutingService {
           }
         }
       }
-      
-      // If B is empty, break
+
       if (B.length === 0) {
         break;
       }
-      
-      // Sort B by cost and get the best path
+
       B.sort((a, b) => a.cost - b.cost);
-      
-      // Find the first path that is not a duplicate of any path in A
       let foundPath = false;
       while (B.length > 0 && !foundPath) {
         const candidate = B.shift();
         if (candidate) {
-          const isDuplicate = A.some(path => 
+          const isDuplicate = A.some(path =>
             this.getPathKey(path) === candidate.key
           );
           if (!isDuplicate) {
@@ -465,18 +413,15 @@ class RoutingService {
           }
         }
       }
-      
+
       if (!foundPath) {
         break;
       }
     }
-    
+
     return A;
   }
 
-  /**
-   * Clone a graph for safe mutation
-   */
   private cloneGraph(graph: Map<string, GraphEdge[]>): Map<string, GraphEdge[]> {
     const clone = new Map<string, GraphEdge[]>();
     for (const [node, edges] of graph) {
@@ -485,29 +430,19 @@ class RoutingService {
     return clone;
   }
 
-  /**
-   * Check if a path shares the same root as another path up to index i
-   */
   private pathsShareRoot(path: GraphEdge[], rootPath: GraphEdge[], index: number): boolean {
     if (path.length <= index) return false;
     if (rootPath.length !== index) return false;
-    
-    return path.slice(0, index).every((e, idx) => 
-      e.to === rootPath[idx]?.to && 
+    return path.slice(0, index).every((e, idx) =>
+      e.to === rootPath[idx]?.to &&
       e.fromName === rootPath[idx]?.fromName
     );
   }
 
-  /**
-   * Generate a unique key for a path
-   */
   private getPathKey(path: GraphEdge[]): string {
     return path.map(e => e.to).join('->');
   }
 
-  /**
-   * Calculate total cost of a path
-   */
   private async calculatePathCost(
     path: GraphEdge[],
     weightKey: WeightKey,
@@ -520,16 +455,11 @@ class RoutingService {
     return totalCost;
   }
 
-  /**
-   * Get vote-adjusted weight for an edge
-   * Walking connections (no connectionId) skip vote adjustment
-   */
   private async getVoteAdjustedWeight(
     edge: GraphEdge,
     baseWeight: number,
     voteStatsMap: Map<string, { upvotes: number; downvotes: number }>
   ): Promise<number> {
-    // Walking connections don't have connectionId, skip vote adjustment
     if (!edge.connectionId || edge.transportType === TransportType.walking) {
       return baseWeight;
     }
@@ -544,45 +474,30 @@ class RoutingService {
       return baseWeight;
     }
 
-    // Calculate confidence score (-1 to 1)
     const confidence = (stats.upvotes - stats.downvotes) / totalVotes;
-    
-    // Apply modifier: positive votes reduce cost (favor reliable connections)
-    // Negative votes increase cost (discourage unreliable connections)
-    // Max reduction: 50% (when confidence = 1)
-    // Max increase: 50% (when confidence = -1)
     const modifier = 1 - (confidence * 0.5);
-    
     return baseWeight * modifier;
   }
 
-  /**
-   * Get the weight of an edge based on optimization criteria
-   */
   private async getWeight(
     edge: GraphEdge,
     weightKey: WeightKey,
     voteStatsMap: Map<string, { upvotes: number; downvotes: number }>
   ): Promise<number> {
     let baseWeight: number;
-    
     if (weightKey === 'price') {
       baseWeight = edge.price;
     } else if (weightKey === 'duration') {
       baseWeight = edge.duration;
-    } else { // balanced
-      // Balance price and duration with configurable weights
-      const normalizedPrice = edge.price / 10; // Normalize price (10 CFA ≈ 1 minute)
-      baseWeight = (normalizedPrice * BALANCED_PRICE_WEIGHT) + 
+    } else {
+      const normalizedPrice = edge.price / 10;
+      baseWeight = (normalizedPrice * BALANCED_PRICE_WEIGHT) +
                    (edge.duration * BALANCED_DURATION_WEIGHT);
     }
 
     return this.getVoteAdjustedWeight(edge, baseWeight, voteStatsMap);
   }
 
-  /**
-   * Format a route from GraphEdge array to CalculatedRoute
-   */
   private formatRoute(steps: GraphEdge[], id?: string): CalculatedRoute {
     const totalPrice = steps.reduce((sum, s) => sum + s.price, 0);
     const totalDuration = steps.reduce((sum, s) => sum + s.duration, 0);
@@ -598,8 +513,6 @@ class RoutingService {
         price: s.price,
         duration: s.duration,
         instructions: s.instructions,
-        fromZone: s.fromZoneId || null,
-        toZone: s.toZoneId || null,
         connectionId: s.connectionId,
         stepIndex: index,
         fromLatitude: s.fromLatitude,
@@ -610,9 +523,6 @@ class RoutingService {
     };
   }
 
-  /**
-   * Format multiple routes with rankings
-   */
   private async formatRoutes(
     routes: GraphEdge[][],
     optimizeBy: 'price' | 'time' | 'balanced'
@@ -622,10 +532,6 @@ class RoutingService {
     });
   }
 
-  /**
-   * Add comparison metadata to routes
-   * Identifies which route is fastest, cheapest, etc.
-   */
   private addRouteComparison(
     routes: CalculatedRoute[],
     optimizeBy: 'price' | 'time' | 'balanced'
@@ -639,17 +545,15 @@ class RoutingService {
       }));
     }
 
-    // Find min values
     const minPrice = Math.min(...routes.map(r => r.totalPrice));
     const minDuration = Math.min(...routes.map(r => r.totalDuration));
     
-    // For balanced, find the route with the best combination
     let bestBalanced = routes[0];
     if (optimizeBy === 'balanced') {
       let bestScore = Infinity;
       for (const route of routes) {
         const normalizedPrice = route.totalPrice / 10;
-        const score = (normalizedPrice * BALANCED_PRICE_WEIGHT) + 
+        const score = (normalizedPrice * BALANCED_PRICE_WEIGHT) +
                      (route.totalDuration * BALANCED_DURATION_WEIGHT);
         if (score < bestScore) {
           bestScore = score;
@@ -658,7 +562,6 @@ class RoutingService {
       }
     }
 
-    // Add flags to each route
     return routes.map(route => ({
       ...route,
       isFastest: route.totalDuration === minDuration,
@@ -667,32 +570,19 @@ class RoutingService {
     }));
   }
 
-  /**
-   * Compute a trust score for a route based on vote stats of its connections
-   * Returns a score from 0-100 where:
-   * - 0: No votes or all negative
-   * - 50: Neutral
-   * - 100: All positive
-   * 
-   * Walking connections are excluded from trust score calculation
-   * since they don't have votes.
-   */
   async computeRouteTrustScore(route: CalculatedRoute): Promise<{
     score: number;
     totalVotes: number;
     stepCount: number;
     averageScore: number;
   }> {
-    // Filter out walking connections - they don't have votes
     const nonWalkingSteps = route.steps.filter(step => step.type !== 'walking');
     const connectionIds = nonWalkingSteps
       .map(s => s.connectionId)
       .filter((id): id is string => !!id);
 
     const totalSteps = route.steps.length;
-    const nonWalkingCount = nonWalkingSteps.length;
 
-    // If no non-walking steps, return neutral score
     if (connectionIds.length === 0) {
       return {
         score: 0,
@@ -728,9 +618,6 @@ class RoutingService {
     const totalVotes = totalUpvotes + totalDownvotes;
     const averageScore = connections.length > 0 ? totalVoteScore / connections.length : 0;
 
-    // Normalize score to 0-100
-    // max possible voteScore per connection is 100 (if all upvotes)
-    // min possible is -100 (if all downvotes)
     const maxScore = 100;
     const minScore = -100;
     const normalizedScore = ((averageScore - minScore) / (maxScore - minScore)) * 100;
@@ -743,18 +630,12 @@ class RoutingService {
     };
   }
 
-  /**
-   * Clear the graph cache (useful for testing or manual refresh)
-   */
   clearCache(): void {
     this.graphCache = null;
     this.lastBuildTime = 0;
     console.log('🗑️ Graph cache cleared');
   }
 
-  /**
-   * Get graph statistics without building the full graph
-   */
   async getGraphStats(): Promise<{
     nodes: number;
     edges: number;

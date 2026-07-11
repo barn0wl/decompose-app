@@ -39,8 +39,6 @@ model Stop {
   latitude  Float
   longitude Float
   type      StopType
-  zoneId    String?
-  zone      Zone?    @relation(fields: [zoneId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -49,27 +47,8 @@ model Stop {
 
   connectionsFrom Connection[] @relation("FromStop")
   connectionsTo   Connection[] @relation("ToStop")
-  
-  // Suggested connections (if this stop is the origin)
-  suggestedFrom SuggestedConnection[] @relation("SuggestionFrom")
-  // Suggested connections (if this stop is the destination)
-  suggestedTo   SuggestedConnection[] @relation("SuggestionTo")
-}
-
-model Zone {
-  id          String   @id @default(uuid())
-  name        String
-  commune     String
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // PostGIS geometry column
-  geom        String?  @db.Text
-
-  stops           Stop[]
-  connectionsFrom Connection[] @relation("FromZone")
-  connectionsTo   Connection[] @relation("ToZone")
+  suggestedFrom   SuggestedConnection[] @relation("SuggestionFrom")
+  suggestedTo     SuggestedConnection[] @relation("SuggestionTo")
 }
 
 model Vote {
@@ -90,27 +69,19 @@ model Vote {
 model Connection {
   id String @id @default(uuid())
 
-  // Origin
-  fromStopId String?
-  fromStop   Stop?  @relation("FromStop", fields: [fromStopId], references: [id])
-  fromZoneId String?
-  fromZone   Zone?  @relation("FromZone", fields: [fromZoneId], references: [id])
+  fromStopId String
+  fromStop   Stop  @relation("FromStop", fields: [fromStopId], references: [id])
 
-  // Destination
-  toStopId String?
-  toStop   Stop?  @relation("ToStop", fields: [toStopId], references: [id])
-  toZoneId String?
-  toZone   Zone?  @relation("ToZone", fields: [toZoneId], references: [id])
+  toStopId String
+  toStop   Stop  @relation("ToStop", fields: [toStopId], references: [id])
 
   transportType    TransportType
   basePrice        Int
-  pricePerZone     Int?
   durationMinutes  Int
   routeDescription String?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
-  // ─── Vote Tracking ──────────────────────────────────────────────
   upvotes          Int    @default(0)
   downvotes        Int    @default(0)
   voteScore        Int    @default(0)
@@ -118,40 +89,30 @@ model Connection {
   votes Vote[]
 }
 
-// ─── SUGGESTED CONNECTION  ────────────────────────────────────────
+// ─── SUGGESTED CONNECTION  ─────────────────────────────────────────
 
 model SuggestedConnection {
   id String @id @default(uuid())
 
-  // Connection details (same as Connection model)
   fromStopId      String
   fromStop        Stop           @relation("SuggestionFrom", fields: [fromStopId], references: [id])
   toStopId        String
   toStop          Stop           @relation("SuggestionTo", fields: [toStopId], references: [id])
-  
   transportType   TransportType
   basePrice       Int
   durationMinutes Int
   routeDescription String?
 
-  // Suggestion metadata
-  submittedBy     String         // Device ID
+  submittedBy     String
   submittedAt     DateTime       @default(now())
-  
-  // Validation system
   status          SuggestionStatus @default(pending)
   confirmations   Int            @default(0)
-  confirmationThreshold Int      @default(5) // Fixed at 5
-  
-  // Track who confirmed (array of device IDs)
-  confirmedBy     Json?          // Array of device IDs
-  
-  // Rejection info
+  confirmationThreshold Int      @default(5)
+  confirmedBy     Json?
   rejectedBy      String?
   rejectedReason  String?
   rejectedAt      DateTime?
   approvedAt      DateTime?
-  
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 }
