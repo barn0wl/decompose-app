@@ -19,14 +19,24 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop, z
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const debouncedQuery = useDebounce(query, 400);
+
+  // When a stop is selected externally, update the query
+  useEffect(() => {
+    if (selectedStop) {
+      setQuery(selectedStop.name);
+      setIsOpen(false);
+    }
+  }, [selectedStop]);
 
   useEffect(() => {
     // Only search if the input is actually focused — prevents ghost searches
     if (!isFocused || debouncedQuery.length < 2) {
       setResults([]);
       setIsOpen(false);
+      setError(null);
       return;
     }
 
@@ -34,14 +44,22 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop, z
 
     const fetchStops = async () => {
       setIsLoading(true);
+      setError(null);
       try {
+        console.log('🔍 Searching for:', debouncedQuery);
         const stops = await searchStops(debouncedQuery);
+        console.log(`✅ Found ${stops.length} stops:`, stops.map(s => s.name).join(', '));
         if (!cancelled) {
           setResults(stops);
           setIsOpen(stops.length > 0);
         }
-      } catch {
-        if (!cancelled) setResults([]);
+      } catch (err) {
+        console.error('❌ Search error:', err);
+        if (!cancelled) {
+          setResults([]);
+          setIsOpen(false);
+          setError(err instanceof Error ? err.message : 'Failed to search stops');
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -52,6 +70,7 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop, z
   }, [debouncedQuery, isFocused]);
 
   const handleSelect = useCallback((stop: Stop) => {
+    console.log('✅ Selected stop:', stop.name);
     onStopSelected(stop);
     setQuery(stop.name);
     setResults([]);
@@ -62,12 +81,19 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop, z
 
   const handleChangeText = useCallback((text: string) => {
     setQuery(text);
+    setError(null);
     if (selectedStop) {
       onStopSelected(null);
     }
   }, [selectedStop, onStopSelected]);
 
-  const handleFocus = useCallback(() => setIsFocused(true), []);
+  const handleFocus = useCallback(() => {
+    setIsFocused(true);
+    // If we have a query, trigger search on focus
+    if (query.length >= 2) {
+      // The useEffect will handle the search
+    }
+  }, [query]);
 
   const handleBlur = useCallback(() => {
     // Small delay so tapping a suggestion registers before the list closes
@@ -91,7 +117,11 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop, z
         autoCapitalize="none"
       />
 
-      {isOpen && (
+      {error && (
+        <Text style={styles.errorText}>{error}</Text>
+      )}
+
+      {isOpen && results.length > 0 && (
         <View style={styles.dropdown}>
           <FlatList
             data={results}
@@ -149,5 +179,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
     marginTop: 2,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#B00020',
+    marginTop: 4,
+    marginLeft: 4,
   },
 });

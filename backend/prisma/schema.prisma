@@ -42,8 +42,11 @@ model Stop {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // PostGIS geometry column
-  geom      String?  @db.Text
+  // Native PostGIS geography column, auto-maintained by a DB trigger
+  // from latitude/longitude. Managed only via raw SQL migrations —
+  // Prisma Migrate ignores Unsupported() columns, so it won't try to
+  // "reconcile" this back to text again.
+  geom      Unsupported("geography(Point, 4326)")?
 
   connectionsFrom Connection[] @relation("FromStop")
   connectionsTo   Connection[] @relation("ToStop")

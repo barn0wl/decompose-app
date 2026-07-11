@@ -64,6 +64,7 @@ export async function searchStops(req: Request, res: Response) {
     if (!q || typeof q !== 'string') {
       return res.status(400).json({ error: 'Search query required' });
     }
+
     const stops = await prisma.stop.findMany({
       where: {
         OR: [
@@ -71,12 +72,21 @@ export async function searchStops(req: Request, res: Response) {
           { commune: { contains: q, mode: 'insensitive' } }
         ]
       },
-      take: 10
+      take: 10,
+      select: {
+        id: true,
+        name: true,
+        commune: true,
+        latitude: true,
+        longitude: true,
+        type: true,
+      }
     });
-    res.json({ stops });
+
+    return res.json({ stops });
   } catch (error) {
     console.error('Search error:', error);
-    res.status(500).json({ error: 'Failed to search stops' });
+    return res.status(500).json({ error: 'Failed to search stops' });
   }
 }
 

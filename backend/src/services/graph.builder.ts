@@ -43,7 +43,6 @@ async function getWalkingEdgesFromPostGIS(
   distance: number;
 }>> {
   try {
-    // Use PostGIS to efficiently find all stop pairs within walking distance
     const result = await prisma.$queryRaw`
       SELECT
         s1.id as "fromId",
