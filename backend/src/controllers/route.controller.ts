@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { routingService } from '../services/routing.service';
+import { routingService } from '@services/routing.service';
 import { calculateRouteSchema } from '../validators/route.validator';
 import { ZodError } from 'zod';
-import prisma from '../lib/prisma';
+import prisma from '@lib/prisma';
 
 export async function calculateRoute(req: Request, res: Response) {
   try {

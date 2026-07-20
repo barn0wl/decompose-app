@@ -1,12 +1,12 @@
 import { Router } from 'express';
-import { calculateRoute, searchStops, getAllStops } from '../controllers/route.controller';
+import { calculateRoute, searchStops, getAllStops } from '@controllers/route.controller';
 import { 
   createSuggestion, 
   getPendingSuggestions, 
   confirmSuggestion,
   getPendingCount 
-} from '../controllers/suggestion.controller';
-import { castVote, getBulkVoteStats, getVoteStats } from '../controllers/vote.controller';
+} from '@controllers/suggestion.controller';
+import { castVote, getBulkVoteStats, getVoteStats } from '@controllers/vote.controller';
 import {
   getPendingSuggestions as adminGetPending,
   approveSuggestion,
@@ -17,8 +17,8 @@ import {
   createStop,
   updateStop,
   deleteStop,
-} from '../controllers/admin.controller';
-import prisma from '../lib/prisma';
+} from '@controllers/admin.controller';
+import prisma from '@lib/prisma';
 
 const router = Router();
 

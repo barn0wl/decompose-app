@@ -1,5 +1,5 @@
-import prisma from '../lib/prisma';
-import { TransportType } from '../../generated/prisma';
+import prisma from '@lib/prisma';
+import { TransportType } from '@generated/prisma';
 
 export interface GraphEdge {
   to: string;

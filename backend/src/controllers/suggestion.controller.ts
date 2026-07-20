@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { suggestionService } from '../services/suggestion.service';
+import { suggestionService } from '@services/suggestion.service';
 import { ZodError } from 'zod';
 import { z } from 'zod';
 

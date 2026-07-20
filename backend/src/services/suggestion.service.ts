@@ -1,5 +1,5 @@
-import prisma from '../lib/prisma';
-import { TransportType, SuggestionStatus } from '../../generated/prisma';
+import prisma from '@lib/prisma';
+import { TransportType } from '@generated/prisma';
 
 interface CreateSuggestionInput {
   fromStopId: string;

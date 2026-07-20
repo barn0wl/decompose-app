@@ -1,6 +1,6 @@
-import { TransportType } from '../../generated/prisma';
-import { buildGraph, GraphEdge, RouteGraph } from './graph.builder';
-import prisma from '../lib/prisma';
+import { TransportType } from '@generated/prisma';
+import { buildGraph, GraphEdge, RouteGraph } from '@services/graph.builder';
+import prisma from '@lib/prisma';
 
 export interface RouteStep {
   type: TransportType;

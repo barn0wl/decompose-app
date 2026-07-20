@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { voteService } from '../services/vote.service';
+import { voteService } from '@services/vote.service';
 import { z } from 'zod';
 
 const voteSchema = z.object({

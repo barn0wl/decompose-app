@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon --exec tsx src/index.ts",
+    "dev": "nodemon --exec tsx -r tsconfig-paths/register src/index.ts",
     "build": "tsc",
-    "start": "node dist/src/index.js",
+    "start": "node -r tsconfig-paths/register dist/src/index.js",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset",
@@ -31,6 +31,7 @@
     "@types/node": "^25.9.0",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"
   }
