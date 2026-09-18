@@ -40,17 +40,17 @@ export default function SuggestConnectionScreen({ navigation }: Props) {
 
   const handleSubmit = async () => {
     if (!deviceId) {
-      Alert.alert('Error', 'Unable to identify device. Please try again.');
+      Alert.alert('Erreur', 'Impossible d\'identifier l\'appareil. Veuillez réessayer.');
       return;
     }
 
     if (!fromStop || !toStop) {
-      Alert.alert('Error', 'Please select both origin and destination stops.');
+      Alert.alert('Erreur', 'Veuillez sélectionner les arrêts de départ et d\'arrivée.');
       return;
     }
 
     if (fromStop.id === toStop.id) {
-      Alert.alert('Error', 'Origin and destination cannot be the same.');
+      Alert.alert('Erreur', 'Le départ et la destination ne peuvent pas être identiques.');
       return;
     }
 
@@ -58,12 +58,12 @@ export default function SuggestConnectionScreen({ navigation }: Props) {
     const durationNum = parseInt(duration);
 
     if (isNaN(priceNum) || priceNum <= 0) {
-      Alert.alert('Error', 'Please enter a valid price.');
+      Alert.alert('Erreur', 'Veuillez entrer un prix valide.');
       return;
     }
 
     if (isNaN(durationNum) || durationNum <= 0) {
-      Alert.alert('Error', 'Please enter a valid duration.');
+      Alert.alert('Erreur', 'Veuillez entrer une durée valide.');
       return;
     }
 
@@ -81,12 +81,12 @@ export default function SuggestConnectionScreen({ navigation }: Props) {
       });
 
       Alert.alert(
-        '✅ Suggestion Submitted!',
-        'Thank you for contributing! Your suggestion will be reviewed by the community. It needs 5 confirmations to become active.',
+        '✅ Suggestion envoyée !',
+        'Merci pour votre contribution ! Votre suggestion sera examinée par la communauté. Elle nécessite 5 confirmations pour devenir active.',
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to submit suggestion.');
+      Alert.alert('Erreur', error.message || 'Échec de l\'envoi de la suggestion.');
     } finally {
       setIsSubmitting(false);
     }
@@ -97,10 +97,10 @@ export default function SuggestConnectionScreen({ navigation }: Props) {
   const renderContent = () => (
     <>
       <Text variant="titleMedium" style={styles.sectionLabel}>
-        Help others discover new routes!
+        Aidez les autres à découvrir de nouveaux trajets !
       </Text>
       <Text variant="bodySmall" style={styles.subtitle}>
-        Your suggestion will be verified by the community before becoming available.
+        Votre suggestion sera vérifiée par la communauté avant d'être disponible.
       </Text>
 
       {/* Origin - Using StopSearchInput */}
@@ -121,7 +121,7 @@ export default function SuggestConnectionScreen({ navigation }: Props) {
 
       {/* Transport Type */}
       <View style={styles.field}>
-        <Text variant="labelMedium" style={styles.fieldLabel}>Transport Type</Text>
+        <Text variant="labelMedium" style={styles.fieldLabel}>Type de transport</Text>
         <SegmentedButtons
           value={transportType}
           onValueChange={(val) => setTransportType(val as TransportType)}
@@ -136,35 +136,35 @@ export default function SuggestConnectionScreen({ navigation }: Props) {
       {/* Price & Duration */}
       <View style={styles.row}>
         <View style={[styles.field, styles.halfField]}>
-          <Text variant="labelMedium" style={styles.fieldLabel}>Price (CFA)</Text>
+          <Text variant="labelMedium" style={styles.fieldLabel}>Prix (CFA)</Text>
           <TextInput
             mode="outlined"
             value={price}
             onChangeText={setPrice}
             keyboardType="numeric"
-            placeholder="e.g. 300"
+            placeholder="ex. 300"
           />
         </View>
         <View style={[styles.field, styles.halfField]}>
-          <Text variant="labelMedium" style={styles.fieldLabel}>Duration (min)</Text>
+          <Text variant="labelMedium" style={styles.fieldLabel}>Durée (min)</Text>
           <TextInput
             mode="outlined"
             value={duration}
             onChangeText={setDuration}
             keyboardType="numeric"
-            placeholder="e.g. 20"
+            placeholder="ex. 20"
           />
         </View>
       </View>
 
       {/* Description */}
       <View style={styles.field}>
-        <Text variant="labelMedium" style={styles.fieldLabel}>Description (optional)</Text>
+        <Text variant="labelMedium" style={styles.fieldLabel}>Description (optionnelle)</Text>
         <TextInput
           mode="outlined"
           value={description}
           onChangeText={setDescription}
-          placeholder="e.g. Gbaka from Adjamé to Yopougon"
+          placeholder="ex. Gbaka d'Adjamé à Yopougon"
           multiline
           numberOfLines={2}
         />
@@ -179,12 +179,12 @@ export default function SuggestConnectionScreen({ navigation }: Props) {
         style={styles.submitButton}
         contentStyle={styles.submitButtonContent}
       >
-        {isSubmitting ? 'Submitting...' : 'Submit Suggestion'}
+        {isSubmitting ? 'Envoi en cours...' : 'Envoyer la suggestion'}
       </Button>
 
       <Text variant="bodySmall" style={styles.footerText}>
-        Your device ID will be used to track your submissions.
-        You can only confirm each suggestion once.
+        Votre identifiant d'appareil sera utilisé pour suivre vos soumissions.
+        Vous ne pouvez confirmer chaque suggestion qu'une seule fois.
       </Text>
     </>
   );
@@ -193,7 +193,7 @@ export default function SuggestConnectionScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content title="Suggest a Route" />
+        <Appbar.Content title="Suggérer un trajet" />
       </Appbar.Header>
 
       <KeyboardAvoidingView

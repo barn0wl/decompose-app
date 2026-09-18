@@ -91,7 +91,7 @@ export default function HomeScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <Appbar.Header>
-        <Appbar.Content title="Décompose" />
+        <Appbar.Content title="Décomposer" />
         <Appbar.Action icon="plus-circle" onPress={handleSuggestRoute} />
       </Appbar.Header>
 
@@ -195,7 +195,7 @@ export default function HomeScreen({ navigation }: Props) {
             contentStyle={styles.suggestButtonContent}
             icon="plus"
           >
-            Suggest a new route
+            Suggérer un trajet
           </Button>
         </View>
       </KeyboardAvoidingView>

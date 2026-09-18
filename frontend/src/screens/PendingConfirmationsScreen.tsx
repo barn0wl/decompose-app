@@ -33,12 +33,11 @@ export default function PendingConfirmationsScreen({ navigation }: Props) {
 
   const fetchSuggestions = useCallback(async () => {
     if (!deviceId) return;
-    
     try {
       const data = await getPendingSuggestions(deviceId);
       setSuggestions(data.suggestions);
     } catch (error) {
-      console.error('Failed to fetch pending suggestions:', error);
+      console.error('Échec du chargement des suggestions en attente :', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -56,29 +55,28 @@ export default function PendingConfirmationsScreen({ navigation }: Props) {
 
   const handleConfirm = async (suggestionId: string) => {
     if (!deviceId) {
-      Alert.alert('Error', 'Unable to identify device.');
+      Alert.alert('Erreur', 'Impossible d\'identifier l\'appareil.');
       return;
     }
 
     setConfirmingId(suggestionId);
     try {
       const result = await confirmSuggestion(suggestionId, deviceId);
-      
       if (result.approved) {
         Alert.alert(
-          '🎉 Route Approved!',
-          'This suggestion has been confirmed by the community and is now available as a route!',
-          [{ text: 'Great!', onPress: () => fetchSuggestions() }]
+          '🎉 Trajet approuvé !',
+          'Cette suggestion a été confirmée par la communauté et est maintenant disponible comme trajet !',
+          [{ text: 'Super !', onPress: () => fetchSuggestions() }]
         );
       } else {
         Alert.alert(
-          '✅ Confirmed!',
+          '✅ Confirmé !',
           result.message,
           [{ text: 'OK', onPress: () => fetchSuggestions() }]
         );
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to confirm suggestion.');
+      Alert.alert('Erreur', error.message || 'Échec de la confirmation de la suggestion.');
     } finally {
       setConfirmingId(null);
     }
@@ -121,16 +119,16 @@ export default function PendingConfirmationsScreen({ navigation }: Props) {
 
           <View style={styles.progressSection}>
             <View style={styles.progressBar}>
-              <View 
+              <View
                 style={[
                   styles.progressFill,
                   { width: `${Math.min(progress * 100, 100)}%` }
-                ]} 
+                ]}
               />
             </View>
             <Text style={styles.progressText}>
               {item.confirmations} / {item.confirmationThreshold} confirmations
-              {remaining > 0 && ` (${remaining} more needed)`}
+              {remaining > 0 && ` (${remaining} restantes)`}
             </Text>
           </View>
 
@@ -142,11 +140,11 @@ export default function PendingConfirmationsScreen({ navigation }: Props) {
             style={styles.confirmButton}
             contentStyle={styles.confirmButtonContent}
           >
-            {isConfirming ? 'Confirming...' : '✅ Confirm this route'}
+            {isConfirming ? 'Confirmation...' : '✅ Confirmer ce trajet'}
           </Button>
 
           <Text style={styles.submittedBy}>
-            Submitted by: {item.submittedBy.substring(0, 12)}...
+            Proposé par : {item.submittedBy.substring(0, 12)}...
           </Text>
         </Card.Content>
       </Card>
@@ -156,17 +154,17 @@ export default function PendingConfirmationsScreen({ navigation }: Props) {
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyIcon}>🎉</Text>
-      <Text style={styles.emptyTitle}>All caught up!</Text>
+      <Text style={styles.emptyTitle}>Tout est à jour !</Text>
       <Text style={styles.emptyText}>
-        No pending routes need confirmation right now.
-        Check back later or suggest a new route!
+        Aucun trajet en attente de confirmation pour le moment.
+        Revenez plus tard ou suggérez un nouveau trajet !
       </Text>
       <Button
         mode="contained"
         onPress={() => navigation.navigate('SuggestConnection')}
         style={styles.emptyButton}
       >
-        Suggest a Route
+        Suggérer un trajet
       </Button>
     </View>
   );
@@ -176,11 +174,11 @@ export default function PendingConfirmationsScreen({ navigation }: Props) {
       <SafeAreaView style={styles.safeArea}>
         <Appbar.Header>
           <Appbar.BackAction onPress={() => navigation.goBack()} />
-          <Appbar.Content title="Confirm Routes" />
+          <Appbar.Content title="Confirmer les trajets" />
         </Appbar.Header>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#6200ee" />
-          <Text style={styles.loadingText}>Loading suggestions...</Text>
+          <Text style={styles.loadingText}>Chargement des suggestions...</Text>
         </View>
       </SafeAreaView>
     );
@@ -190,9 +188,9 @@ export default function PendingConfirmationsScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content 
-          title="Confirm Routes" 
-          subtitle={`${suggestions.length} pending`}
+        <Appbar.Content
+          title="Confirmer les trajets"
+          subtitle={`${suggestions.length} en attente`}
         />
       </Appbar.Header>
 

@@ -58,9 +58,9 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
   };
 
   const getBadgeText = () => {
-    if (isFastest) return '⚡ Fastest';
-    if (isCheapest) return '💰 Cheapest';
-    if (isBestBalanced) return '⚖️ Best Balance';
+    if (isFastest) return '⚡ Plus rapide';
+    if (isCheapest) return '💰 Moins cher';
+    if (isBestBalanced) return '⚖️ Équilibré';
     return '';
   };
 
@@ -78,7 +78,7 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
         const stats = await getBulkVoteStats(connectionIds, deviceId);
         setStepVoteStats(stats);
       } catch (error) {
-        console.error('Failed to fetch step vote stats:', error);
+        console.error('Échec du chargement des votes :', error);
       } finally {
         setLoadingVotes(false);
       }
@@ -124,7 +124,7 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
 
   const handleVote = useCallback(async (connectionId: string, vote: 1 | -1) => {
     if (!deviceId) {
-      Alert.alert('Error', 'Unable to identify device. Please try again.');
+      Alert.alert('Erreur', 'Impossible d\'identifier l\'appareil. Veuillez réessayer.');
       return;
     }
     if (isVoting) return;
@@ -147,11 +147,11 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
         }
       }));
 
-      const message = vote === 1 ? '⬆️ Upvoted!' : '⬇️ Downvoted!';
-      Alert.alert('Vote recorded', message);
+      const message = vote === 1 ? '⬆️ Vote positif !' : '⬇️ Vote négatif !';
+      Alert.alert('Vote enregistré', message);
 
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to cast vote. Please try again.');
+      Alert.alert('Erreur', error.message || 'Échec du vote. Veuillez réessayer.');
     } finally {
       setIsVoting(false);
     }
@@ -175,7 +175,7 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
         />
         {isActive && (
           <View style={styles.activeIndicator}>
-            <Text style={styles.activeIndicatorText}>📍 Current step</Text>
+            <Text style={styles.activeIndicatorText}>📍 Étape actuelle</Text>
           </View>
         )}
       </View>

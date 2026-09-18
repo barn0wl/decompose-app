@@ -26,14 +26,13 @@ const OPTIMIZE_EMOJIS = {
 
 export default function ResultsScreen({ navigation, route }: Props) {
   const deviceId = useDeviceId();
-  const { 
-    originName, 
-    destinationName, 
-    optimizeBy, 
+  const {
+    originName,
+    destinationName,
+    optimizeBy,
     routes,
-    routeLimit = 1 
+    routeLimit = 1
   } = route.params;
-  
   const [contextualSuggestions, setContextualSuggestions] = useState<SuggestedConnection[]>([]);
   const [showContextual, setShowContextual] = useState(false);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState<number | null>(null);
@@ -162,7 +161,7 @@ export default function ResultsScreen({ navigation, route }: Props) {
           </Text>
           {routeLimit > 1 && (
             <Text style={styles.routeLimitBadge}>
-              Max: {routeLimit} routes
+              Max : {routeLimit} trajets
             </Text>
           )}
         </View>
@@ -179,9 +178,9 @@ export default function ResultsScreen({ navigation, route }: Props) {
         <View style={styles.contextualHeader}>
           <Text style={styles.contextualIcon}>💡</Text>
           <View style={styles.contextualText}>
-            <Text style={styles.contextualTitle}>Help verify routes!</Text>
+            <Text style={styles.contextualTitle}>Aidez à vérifier les trajets !</Text>
             <Text style={styles.contextualSubtitle}>
-              {contextualSuggestions.length} pending route{contextualSuggestions.length > 1 ? 's' : ''} near your search
+              {contextualSuggestions.length} trajet{contextualSuggestions.length > 1 ? 's' : ''} en attente près de votre recherche
             </Text>
           </View>
         </View>
@@ -205,7 +204,7 @@ export default function ResultsScreen({ navigation, route }: Props) {
           style={styles.contextualButton}
           compact
         >
-          Confirm Routes
+          Confirmer les trajets
         </Button>
       </Card.Content>
     </Card>
@@ -250,16 +249,15 @@ export default function ResultsScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content 
-          title="Résultats" 
+        <Appbar.Content
+          title="Résultats"
           subtitle={`${routes.length} trajet${routes.length > 1 ? 's' : ''}`}
         />
-        <Appbar.Action 
-          icon="refresh" 
+        <Appbar.Action
+          icon="refresh"
           onPress={() => {
-            // Refresh by going back and re-searching
             navigation.goBack();
-          }} 
+          }}
         />
       </Appbar.Header>
 
