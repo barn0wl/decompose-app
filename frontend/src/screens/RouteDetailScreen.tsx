@@ -1,15 +1,23 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { StyleSheet, View, FlatList, ListRenderItemInfo, Alert } from 'react-native';
-import { Text, Appbar, Button, Card, Badge } from 'react-native-paper';
+import { Text, Appbar, Button } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import RouteStepItem from '../components/RouteStepItem';
 import RouteMap from '../components/RouteMap';
-import { RootStackParamList, CalculatedRoute, RouteStep } from '../types';
-import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
+import { RootStackParamList, CalculatedRoute, RouteStep, TransportType } from '../types';
+import { TRANSPORT_LABELS } from '../constants/transport';
 import { getBulkVoteStats, castVote, VoteStats } from '../services/api';
 import { useDeviceId } from '../hooks/useDeviceId';
+import { COLORS, FONTS } from '../constants/theme';
+import TransportIcon from '../components/TransportIcon';
+
+// SVG icons
+import BoltIcon from '../../assets/icons/bolt.svg';
+import CoinsIcon from '../../assets/icons/coins.svg';
+import ScaleIcon from '../../assets/icons/scale.svg';
+import MapIcon from '../../assets/icons/map.svg';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RouteDetail'>;
 
@@ -20,13 +28,12 @@ function formatDuration(minutes: number): string {
   return m > 0 ? `${h}h${m.toString().padStart(2, '0')}` : `${h}h`;
 }
 
-function getUniqueTransportTypes(steps: CalculatedRoute['steps']): string[] {
-  const seen = new Set<string>();
-  const types: string[] = [];
+function getUniqueTransportTypes(steps: CalculatedRoute['steps']): TransportType[] {
+  const seen = new Set<TransportType>();
+  const types: TransportType[] = [];
   for (const step of steps) {
-    const label = TRANSPORT_LABELS[step.type];
-    if (!seen.has(label)) {
-      seen.add(label);
+    if (!seen.has(step.type)) {
+      seen.add(step.type);
       types.push(step.type);
     }
   }
@@ -43,28 +50,34 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
   const [selectedStepIndex, setSelectedStepIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
 
-  // Determine route comparison status
   const isFastest = selectedRoute.isFastest;
   const isCheapest = selectedRoute.isCheapest;
   const isBestBalanced = selectedRoute.isBestBalanced;
   const hasComparisonBadge = isFastest || isCheapest || isBestBalanced;
 
-  // Get badge color based on status
+  // Badge helpers
   const getBadgeColor = () => {
-    if (isFastest) return '#4CAF50';
-    if (isCheapest) return '#FF9800';
-    if (isBestBalanced) return '#6200ee';
-    return '#888';
+    if (isFastest) return COLORS.highlight;
+    if (isCheapest) return COLORS.accent;
+    if (isBestBalanced) return COLORS.primary;
+    return COLORS.border;
   };
 
   const getBadgeText = () => {
-    if (isFastest) return '⚡ Plus rapide';
-    if (isCheapest) return '💰 Moins cher';
-    if (isBestBalanced) return '⚖️ Équilibré';
+    if (isFastest) return 'Plus rapide';
+    if (isCheapest) return 'Moins cher';
+    if (isBestBalanced) return 'Équilibré';
     return '';
   };
 
-  // Fetch vote stats for each step
+  const getBadgeIcon = () => {
+    if (isFastest) return <BoltIcon width={12} height={12} fill={COLORS.textLight} />;
+    if (isCheapest) return <CoinsIcon width={12} height={12} fill={COLORS.textLight} />;
+    if (isBestBalanced) return <ScaleIcon width={12} height={12} fill={COLORS.textLight} />;
+    return null;
+  };
+
+  // Fetch vote stats
   useEffect(() => {
     const fetchStepVotes = async () => {
       if (!deviceId) return;
@@ -86,9 +99,7 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
     fetchStepVotes();
   }, [deviceId, selectedRoute.steps]);
 
-  const handleGoBack = () => {
-    navigation.goBack();
-  };
+  const handleGoBack = () => navigation.goBack();
 
   const handleNewSearch = () => {
     navigation.popToTop();
@@ -130,11 +141,7 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
     if (isVoting) return;
     setIsVoting(true);
     try {
-      const result = await castVote({
-        connectionId,
-        deviceId,
-        vote,
-      });
+      const result = await castVote({ connectionId, deviceId, vote });
 
       setStepVoteStats(prev => ({
         ...prev,
@@ -144,12 +151,11 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
           voteScore: result.voteScore,
           totalVotes: result.totalVotes,
           userVote: result.userVote,
-        }
+        },
       }));
 
-      const message = vote === 1 ? '⬆️ Vote positif !' : '⬇️ Vote négatif !';
+      const message = vote === 1 ? 'Vote positif enregistré' : 'Vote négatif enregistré';
       Alert.alert('Vote enregistré', message);
-
     } catch (error: any) {
       Alert.alert('Erreur', error.message || 'Échec du vote. Veuillez réessayer.');
     } finally {
@@ -175,7 +181,7 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
         />
         {isActive && (
           <View style={styles.activeIndicator}>
-            <Text style={styles.activeIndicatorText}>📍 Étape actuelle</Text>
+            <Text style={styles.activeIndicatorText}>Étape actuelle</Text>
           </View>
         )}
       </View>
@@ -184,11 +190,13 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Appbar.Header>
-        <Appbar.BackAction onPress={handleGoBack} />
+      <Appbar.Header style={styles.appbar}>
+        <Appbar.BackAction onPress={handleGoBack} color={COLORS.textLight} />
         <Appbar.Content
           title="Détail du trajet"
           subtitle={`${originName} → ${destinationName}`}
+          titleStyle={styles.appbarTitle}
+          subtitleStyle={styles.appbarSubtitle}
         />
       </Appbar.Header>
 
@@ -200,36 +208,37 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
         onScrollToIndexFailed={handleScrollToIndexFailed}
         ListHeaderComponent={
           <View style={styles.headerContainer}>
-            <Card style={styles.summaryCard}>
-              <Card.Content>
-                {/* Route Comparison Badge */}
+            {/* Summary card */}
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryAccent} />
+
+              <View style={styles.summaryContent}>
+                {/* Comparison badge */}
                 {hasComparisonBadge && (
-                  <View style={styles.comparisonBadgeContainer}>
-                    <Badge
-                      style={[
-                        styles.comparisonBadge,
-                        { backgroundColor: getBadgeColor() }
-                      ]}
-                    >
-                      {getBadgeText()}
-                    </Badge>
+                  <View style={styles.badgeContainer}>
+                    <View style={[styles.badge, { backgroundColor: getBadgeColor() }]}>
+                      {getBadgeIcon()}
+                      <Text style={styles.badgeText}>{getBadgeText()}</Text>
+                    </View>
                   </View>
                 )}
 
+                {/* Price + Duration */}
                 <View style={styles.summaryRow}>
-                  <View style={styles.priceContainer}>
-                    <Text style={styles.priceLabel}>Total</Text>
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryLabel}>Total</Text>
                     <Text style={styles.priceValue}>{selectedRoute.totalPrice} CFA</Text>
                   </View>
                   <View style={styles.divider} />
-                  <View style={styles.durationContainer}>
-                    <Text style={styles.durationLabel}>Durée</Text>
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryLabel}>Durée</Text>
                     <Text style={styles.durationValue}>
                       {formatDuration(selectedRoute.totalDuration)}
                     </Text>
                   </View>
                 </View>
 
+                {/* Steps + transport chips */}
                 <View style={styles.stepsInfo}>
                   <Text style={styles.stepsText}>
                     {selectedRoute.steps.length} étape{selectedRoute.steps.length > 1 ? 's' : ''}
@@ -237,20 +246,21 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
                   <View style={styles.transportChips}>
                     {uniqueTransportTypes.map((type) => (
                       <View key={type} style={styles.chip}>
-                        <Text style={styles.chipIcon}>{TRANSPORT_ICONS[type]}</Text>
+                        <TransportIcon type={type} size={14} />
                         <Text style={styles.chipLabel}>{TRANSPORT_LABELS[type]}</Text>
                       </View>
                     ))}
                   </View>
                 </View>
-              </Card.Content>
-            </Card>
+              </View>
+            </View>
 
-            {/* 🗺️ Route Map */}
+            {/* Map section */}
             <View style={styles.mapSection}>
-              <Text variant="labelSmall" style={styles.mapLabel}>
-                🗺️ Visualisation du trajet
-              </Text>
+              <View style={styles.sectionHeader}>
+                <MapIcon width={16} height={16} fill={COLORS.primary} />
+                <Text style={styles.sectionHeaderText}>Visualisation du trajet</Text>
+              </View>
               <RouteMap
                 steps={selectedRoute.steps}
                 height={250}
@@ -259,9 +269,7 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
               />
             </View>
 
-            <Text variant="labelSmall" style={styles.stepsHeader}>
-              Étapes du trajet
-            </Text>
+            <Text style={styles.sectionHeaderText}>Étapes du trajet</Text>
           </View>
         }
         ListFooterComponent={
@@ -271,6 +279,8 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
               onPress={handleNewSearch}
               style={styles.newSearchButton}
               contentStyle={styles.newSearchButtonContent}
+              icon="arrow-left"
+              textColor={COLORS.primary}
             >
               Refaire la recherche
             </Button>
@@ -286,7 +296,20 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.background,
+  },
+  appbar: {
+    backgroundColor: COLORS.primary,
+  },
+  appbarTitle: {
+    fontFamily: FONTS.heading,
+    color: COLORS.textLight,
+    fontWeight: '700',
+  },
+  appbarSubtitle: {
+    color: COLORS.textLight,
+    opacity: 0.75,
+    fontSize: 12,
   },
   listContent: {
     paddingVertical: 12,
@@ -295,83 +318,102 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 8,
   },
+
+  // Summary card
   summaryCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
     marginBottom: 16,
+    position: 'relative',
+    overflow: 'hidden',
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
   },
-  comparisonBadgeContainer: {
+  summaryAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: COLORS.accent,
+  },
+  summaryContent: {
+    padding: 16,
+  },
+  badgeContainer: {
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  comparisonBadge: {
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  badgeText: {
+    fontFamily: FONTS.heading,
     fontSize: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    height: 24,
-    color: '#fff',
-    fontWeight: '600',
+    fontWeight: '700',
+    color: COLORS.textLight,
+    letterSpacing: 0.3,
   },
+
+  // Summary row
   summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingVertical: 8,
   },
-  priceContainer: {
+  summaryItem: {
     flex: 1,
     alignItems: 'center',
   },
-  priceLabel: {
-    fontSize: 12,
-    color: '#888',
+  summaryLabel: {
+    fontFamily: FONTS.heading,
+    fontSize: 11,
+    color: COLORS.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 4,
+    fontWeight: '600',
   },
   priceValue: {
-    fontSize: 28,
+    fontFamily: FONTS.heading,
+    fontSize: 26,
     fontWeight: '700',
-    color: '#1a1a1a',
+    color: COLORS.primary,
+  },
+  durationValue: {
+    fontFamily: FONTS.heading,
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   divider: {
     width: 1,
     height: 40,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: COLORS.surfaceAlt,
   },
-  durationContainer: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  durationLabel: {
-    fontSize: 12,
-    color: '#888',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  durationValue: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#1a1a1a',
-  },
+
+  // Steps info
   stepsInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: COLORS.surfaceAlt,
     marginTop: 4,
   },
   stepsText: {
     fontSize: 13,
-    color: '#555',
+    color: COLORS.textMuted,
     fontWeight: '500',
   },
   transportChips: {
@@ -381,69 +423,83 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
+    gap: 6,
+    backgroundColor: COLORS.surfaceAlt,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  chipIcon: {
-    fontSize: 14,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
   chipLabel: {
-    fontSize: 12,
-    color: '#444',
-    fontWeight: '500',
+    fontFamily: FONTS.heading,
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '600',
   },
+
+  // Map
   mapSection: {
     marginBottom: 16,
   },
-  mapLabel: {
-    color: '#888',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginBottom: 8,
     marginLeft: 4,
   },
-  stepsHeader: {
-    color: '#888',
+  sectionHeaderText: {
+    fontFamily: FONTS.heading,
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 8,
-    marginLeft: 4,
   },
+
+  // Footer
   footer: {
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 24,
   },
   newSearchButton: {
-    borderRadius: 8,
-    borderColor: '#6200ee',
+    borderRadius: 12,
+    borderColor: COLORS.primary,
+    borderWidth: 1.5,
   },
   newSearchButtonContent: {
     paddingVertical: 6,
   },
+
+  // Step wrapper
   stepWrapper: {
     position: 'relative',
   },
   activeStepWrapper: {
-    backgroundColor: 'rgba(98, 0, 238, 0.05)',
-    borderRadius: 10,
-    marginHorizontal: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    marginHorizontal: 12,
+    marginVertical: 4,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
   activeIndicator: {
     position: 'absolute',
-    right: 24,
+    right: 20,
     top: 12,
-    backgroundColor: '#6200ee',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   activeIndicatorText: {
-    color: '#fff',
+    fontFamily: FONTS.heading,
+    color: COLORS.textLight,
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });

@@ -1,15 +1,16 @@
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Card, Text, Chip, Badge } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 
 import { CalculatedRoute } from '../types';
-import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
-import TrustIndicator from './TrustIndicator';
+import { TRANSPORT_LABELS } from '../constants/transport';
+import { COLORS, FONTS } from '../constants/theme';
+import TransportIcon from './TransportIcon';
 
 interface Props {
   route: CalculatedRoute;
   onPress: (route: CalculatedRoute) => void;
   rank: number;
-  totalRoutes?: number; // Total number of routes being displayed
+  totalRoutes?: number;
 }
 
 function formatDuration(minutes: number): string {
@@ -24,227 +25,244 @@ export default function RouteCard({ route, onPress, rank, totalRoutes = 1 }: Pro
   const trustScore = route.trustScore;
   const isOnlyRoute = totalRoutes === 1;
 
-  // Determine if this route has special status
   const isFastest = route.isFastest && !isOnlyRoute;
   const isCheapest = route.isCheapest && !isOnlyRoute;
   const isBestBalanced = route.isBestBalanced && !isOnlyRoute;
 
-  // Get badge color based on status
-  const getBadgeColor = () => {
-    if (isFastest) return '#4CAF50';
-    if (isCheapest) return '#FF9800';
-    if (isBestBalanced) return '#6200ee';
-    return '#888';
+  // Get accent color based on route status
+  const getAccentColor = () => {
+    if (isFastest) return COLORS.highlight;   // Blue
+    if (isCheapest) return COLORS.accent;     // Gold
+    if (isBestBalanced) return COLORS.primary; // Teal
+    return COLORS.border;
   };
 
   const getBadgeText = () => {
-    if (isFastest) return '⚡ Fastest';
-    if (isCheapest) return '💰 Cheapest';
-    if (isBestBalanced) return '⚖️ Best Balance';
+    if (isFastest) return 'Plus rapide';
+    if (isCheapest) return 'Moins cher';
+    if (isBestBalanced) return 'Équilibré';
     return '';
   };
 
-  // Determine card border style
-  const getCardStyle = () => {
-    if (isFastest) return [styles.card, styles.fastestCard];
-    if (isCheapest) return [styles.card, styles.cheapestCard];
-    if (isBestBalanced) return [styles.card, styles.balancedCard];
-    return styles.card;
+  const getBadgeColor = () => {
+    if (isFastest) return COLORS.highlight;
+    if (isCheapest) return COLORS.accent;
+    if (isBestBalanced) return COLORS.primary;
+    return COLORS.border;
   };
 
+  // Deduplicate transport types for chips (show unique types only)
+  const uniqueTransportTypes = Array.from(
+    new Set(route.steps.map(s => s.type))
+  );
+
   return (
-    <TouchableOpacity onPress={() => onPress(route)} activeOpacity={0.8}>
-      <Card style={getCardStyle()}>
-        <Card.Content>
-          {/* Header with Rank and Price */}
+    <TouchableOpacity onPress={() => onPress(route)} activeOpacity={0.85}>
+      <View style={styles.card}>
+        <View style={[styles.cardAccent, { backgroundColor: getAccentColor() }]} />
+
+        <View style={styles.cardContent}>
+          {/* Header: Rank + Badge + Price */}
           <View style={styles.header}>
             <View style={styles.leftHeader}>
-              <Text variant="labelSmall" style={styles.rank}>
-                Option {rank}
-              </Text>
-              {/* Status Badges */}
+              <Text style={styles.rank}>Option {rank}</Text>
               {(isFastest || isCheapest || isBestBalanced) && (
-                <View style={styles.badgeContainer}>
-                  <Badge
-                    style={[
-                      styles.statusBadge,
-                      { backgroundColor: getBadgeColor() }
-                    ]}
-                  >
-                    {getBadgeText()}
-                  </Badge>
+                <View style={[styles.statusBadge, { backgroundColor: getBadgeColor() }]}>
+                  <Text style={styles.statusBadgeText}>{getBadgeText()}</Text>
                 </View>
               )}
             </View>
-            <Text variant="headlineSmall" style={styles.price}>
-              {route.totalPrice} CFA
-            </Text>
+            <Text style={styles.price}>{route.totalPrice} CFA</Text>
           </View>
 
-          {/* Meta: Duration and Steps */}
+          {/* Meta: Duration + Steps */}
           <View style={styles.meta}>
-            <Text variant="bodyMedium" style={styles.duration}>
-              ⏱ {formatDuration(route.totalDuration)}
-            </Text>
-            <Text variant="bodyMedium" style={styles.steps}>
+            <Text style={styles.metaText}>{formatDuration(route.totalDuration)}</Text>
+            <Text style={styles.metaDot}>•</Text>
+            <Text style={styles.metaText}>
               {stepCount} étape{stepCount > 1 ? 's' : ''}
             </Text>
           </View>
 
-          {/* Transport Chips */}
-          <View style={styles.chipRow}>
-            {route.steps.map((step, i) => (
-              <Chip
-                key={i}
-                compact
-                style={styles.chip}
-                textStyle={styles.chipText}
-                icon={() => <Text style={styles.chipIcon}>{TRANSPORT_ICONS[step.type]}</Text>}
-              >
-                {TRANSPORT_LABELS[step.type]}
-              </Chip>
+          {/* Transport Icons (unique types only) */}
+          <View style={styles.transportRow}>
+            {uniqueTransportTypes.map((type, i) => (
+              <View key={i} style={styles.transportChip}>
+                <TransportIcon type={type} size={14} />
+                <Text style={styles.transportChipText}>
+                  {TRANSPORT_LABELS[type]}
+                </Text>
+              </View>
             ))}
           </View>
 
-          {/* Footer with Trust Score and Step Info */}
+          {/* Footer: Trust Score + Compare Hint */}
           <View style={styles.footer}>
             {trustScore && (
-              <TrustIndicator
-                score={trustScore.score}
-                totalVotes={trustScore.totalVotes}
-                size="small"
-              />
+              <View style={styles.trustContainer}>
+                <View
+                  style={[
+                    styles.trustDot,
+                    {
+                      backgroundColor:
+                        trustScore.score >= 70
+                          ? COLORS.primary
+                          : trustScore.score >= 40
+                          ? COLORS.accent
+                          : COLORS.border,
+                    },
+                  ]}
+                />
+                <Text style={styles.trustText}>
+                  {trustScore.score}% de confiance
+                  {trustScore.totalVotes > 0 && ` (${trustScore.totalVotes})`}
+                </Text>
+              </View>
             )}
-            <View style={styles.footerRight}>
-              {trustScore && trustScore.stepCount > 0 && (
-                <Text style={styles.stepInfo}>
-                  {trustScore.stepCount} connection{trustScore.stepCount > 1 ? 's' : ''}
-                </Text>
-              )}
-              {/* Show route comparison indicator */}
-              {!isOnlyRoute && (
-                <Text style={styles.compareHint}>
-                  {rank === 1 ? '👑 Best' : `#${rank}`}
-                </Text>
-              )}
-            </View>
+            {!isOnlyRoute && (
+              <Text style={styles.compareHint}>
+                {rank === 1 ? 'Meilleure option' : `#${rank}`}
+              </Text>
+            )}
           </View>
-        </Card.Content>
-      </Card>
+        </View>
+      </View>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
     marginBottom: 12,
-    borderRadius: 10,
-    backgroundColor: '#fff',
+    position: 'relative',
+    overflow: 'hidden',
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
   },
-  fastestCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
+  cardAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
   },
-  cheapestCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF9800',
+  cardContent: {
+    padding: 16,
   },
-  balancedCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#6200ee',
-  },
+
+  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   leftHeader: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
   },
   rank: {
-    color: '#888',
+    fontFamily: FONTS.heading,
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    fontSize: 12,
-  },
-  badgeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  statusBadgeText: {
+    fontFamily: FONTS.heading,
     fontSize: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    height: 20,
-    color: '#fff',
-    fontWeight: '600',
+    fontWeight: '700',
+    color: COLORS.textLight,
+    letterSpacing: 0.3,
   },
   price: {
-    fontWeight: '700',
-    color: '#1a1a1a',
+    fontFamily: FONTS.heading,
     fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
+
+  // Meta
   meta: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 10,
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
   },
-  duration: {
-    color: '#444',
+  metaText: {
     fontSize: 14,
+    color: COLORS.textDark,
+    fontWeight: '500',
   },
-  steps: {
-    color: '#444',
+  metaDot: {
     fontSize: 14,
+    color: COLORS.textMuted,
   },
-  chipRow: {
+
+  // Transport row
+  transportRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  transportChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
-    marginBottom: 8,
+    backgroundColor: COLORS.surfaceAlt,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
-  chip: {
-    backgroundColor: '#f0f0f0',
-    height: 28,
-  },
-  chipText: {
+  transportChipText: {
+    fontFamily: FONTS.heading,
     fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
-  chipIcon: {
-    fontSize: 14,
-    marginRight: 2,
-  },
+
+  // Footer
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
-    paddingTop: 8,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: COLORS.surfaceAlt,
   },
-  footerRight: {
+  trustContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  stepInfo: {
-    fontSize: 11,
-    color: '#888',
+  trustDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  trustText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
   },
   compareHint: {
+    fontFamily: FONTS.heading,
     fontSize: 11,
-    color: '#6200ee',
-    fontWeight: '600',
+    color: COLORS.primary,
+    fontWeight: '700',
   },
 });

@@ -1,6 +1,7 @@
+import { useFonts, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { PaperProvider } from 'react-native-paper';
+import { PaperProvider, ActivityIndicator } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import HomeScreen from './src/screens/HomeScreen';
@@ -13,6 +14,13 @@ import { RootStackParamList } from './src/types';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
+
+  const [fontsLoaded] = useFonts({
+    SpaceGrotesk_700Bold,
+  });
+
+  if (!fontsLoaded) return <ActivityIndicator />;
+  
   return (
     <SafeAreaProvider>
       <PaperProvider>

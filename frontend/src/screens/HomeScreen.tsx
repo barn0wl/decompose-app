@@ -1,6 +1,18 @@
 import { useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, Button, SegmentedButtons, Appbar, Badge, Menu } from 'react-native-paper';
+import {
+  View,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  TouchableOpacity,
+} from 'react-native';
+import {
+  Text,
+  Button,
+  Appbar,
+} from 'react-native-paper';
+import Slider from '@react-native-community/slider';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -9,6 +21,7 @@ import PendingBanner from '../components/PendingBanner';
 import { calculateRoute, getPendingCount } from '../services/api';
 import { RootStackParamList, Stop } from '../types';
 import { useDeviceId } from '../hooks/useDeviceId';
+import { COLORS, FONTS } from '../constants/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 type OptimizeBy = 'price' | 'time' | 'balanced';
@@ -18,24 +31,20 @@ export default function HomeScreen({ navigation }: Props) {
   const [origin, setOrigin] = useState<Stop | null>(null);
   const [destination, setDestination] = useState<Stop | null>(null);
   const [optimizeBy, setOptimizeBy] = useState<OptimizeBy>('price');
-  const [routeLimit, setRouteLimit] = useState<number>(3); // Default to 3 routes
+  const [routeLimit, setRouteLimit] = useState<number>(3);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
-  const [menuVisible, setMenuVisible] = useState(false);
 
   const canSearch = origin !== null && destination !== null && !isLoading;
 
-  // Fetch pending count for banner
   useEffect(() => {
     const fetchPendingCount = async () => {
       if (!deviceId) return;
       try {
         const data = await getPendingCount(deviceId);
         setPendingCount(data.count);
-      } catch {
-        // Silently fail - banner just won't show
-      }
+      } catch {}
     };
     fetchPendingCount();
   }, [deviceId]);
@@ -52,10 +61,10 @@ export default function HomeScreen({ navigation }: Props) {
 
     try {
       const response = await calculateRoute(
-        origin.id, 
-        destination.id, 
+        origin.id,
+        destination.id,
         optimizeBy,
-        routeLimit // Pass the route limit
+        routeLimit
       );
       navigation.navigate('Results', {
         originId: origin.id,
@@ -64,10 +73,10 @@ export default function HomeScreen({ navigation }: Props) {
         destinationName: destination.name,
         optimizeBy,
         routes: response.routes,
-        routeLimit, // Pass the limit so Results can show context
+        routeLimit,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue. Réessaie.');
+      setError(err instanceof Error ? err.message : 'Une erreur est survenue.');
     } finally {
       setIsLoading(false);
     }
@@ -90,12 +99,15 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Appbar.Header>
-        <Appbar.Content title="Décomposer" />
-        <Appbar.Action icon="plus-circle" onPress={handleSuggestRoute} />
-      </Appbar.Header>
+      {/* Custom Header */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <Text style={styles.appTitle}>Décomposer</Text>
+          <Text style={styles.appSubtitle}>Trouve ta route, économise</Text>
+        </View>
+        <View style={styles.headerAccent} />
+      </View>
 
-      {/* Pending Banner */}
       {pendingCount > 0 && (
         <PendingBanner
           count={pendingCount}
@@ -107,70 +119,110 @@ export default function HomeScreen({ navigation }: Props) {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.content}>
-          <Text variant="titleMedium" style={styles.sectionLabel}>D'où tu pars ?</Text>
-          <StopSearchInput
-            label="Point de départ"
-            selectedStop={origin}
-            onStopSelected={setOrigin}
-            zIndex={2}
-          />
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={[styles.card, styles.searchCard]}>
+            <View style={styles.cardAccent} />
 
-          <Text variant="titleMedium" style={styles.sectionLabel}>Tu vas où ?</Text>
-          <StopSearchInput
-            label="Destination"
-            selectedStop={destination}
-            onStopSelected={setDestination}
-            zIndex={1}
-          />
+            <View style={styles.cardContent}>
+              <Text style={styles.sectionLabel}>D'où tu pars ?</Text>
+              <StopSearchInput
+                label="Point de départ"
+                selectedStop={origin}
+                onStopSelected={setOrigin}
+                zIndex={2}
+              />
 
-          <Text variant="titleMedium" style={styles.sectionLabel}>Optimiser par</Text>
-          <SegmentedButtons
-            value={optimizeBy}
-            onValueChange={val => setOptimizeBy(val as OptimizeBy)}
-            style={styles.segmented}
-            buttons={[
-              { value: 'price', label: '💰 Prix' },
-              { value: 'time', label: '⚡ Temps' },
-              { value: 'balanced', label: '⚖️ Équilibré' },
-            ]}
-          />
+              <Text style={styles.sectionLabel}>Tu vas où ?</Text>
+              <StopSearchInput
+                label="Destination"
+                selectedStop={destination}
+                onStopSelected={setDestination}
+                zIndex={1}
+              />
+            </View>
+          </View>
 
-          {/* Route Limit Selector */}
-          <View style={styles.limitContainer}>
-            <Text variant="labelMedium" style={styles.limitLabel}>
-              Nombre de trajets à afficher
-            </Text>
-            <Menu
-              visible={menuVisible}
-              onDismiss={() => setMenuVisible(false)}
-              anchor={
-                <Button
-                  mode="outlined"
-                  onPress={() => setMenuVisible(true)}
-                  style={styles.limitButton}
-                  contentStyle={styles.limitButtonContent}
-                  icon="chevron-down"
-                >
-                  {getRouteLimitLabel(routeLimit)}
-                </Button>
-              }
-            >
-              {[1, 2, 3, 4, 5].map((limit) => (
-                <Menu.Item
-                  key={limit}
-                  onPress={() => {
-                    setRouteLimit(limit);
-                    setMenuVisible(false);
-                  }}
-                  title={getRouteLimitLabel(limit)}
-                  leadingIcon={routeLimit === limit ? 'check' : undefined}
+          <View style={[styles.card, styles.optimizationCard]}>
+            <View style={styles.cardAccent} />
+
+            <View style={styles.cardContent}>
+              <Text style={styles.sectionLabel}>Optimiser par</Text>
+              <View style={styles.optimizeContainer}>
+                {([
+                  { value: 'price', label: 'Prix' },
+                  { value: 'time', label: 'Temps' },
+                  { value: 'balanced', label: 'Équilibré' },
+                ] as const).map((option) => {
+                  const isSelected = optimizeBy === option.value;
+                  return (
+                    <TouchableOpacity
+                      key={option.value}
+                      onPress={() => setOptimizeBy(option.value)}
+                      activeOpacity={0.8}
+                      style={[
+                        styles.optimizeButton,
+                        isSelected && styles.optimizeButtonSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.optimizeButtonText,
+                          isSelected && styles.optimizeButtonTextSelected,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.limitContainer}>
+                <View style={styles.limitHeader}>
+                  <Text style={styles.limitLabel}>
+                    Nombre de trajets à afficher
+                  </Text>
+                  <View style={styles.limitValueBadge}>
+                    <Text style={styles.limitValueText}>
+                      {routeLimit}
+                    </Text>
+                  </View>
+                </View>
+
+                <Slider
+                  style={styles.slider}
+                  minimumValue={1}
+                  maximumValue={5}
+                  step={1}
+                  value={routeLimit}
+                  onValueChange={(value) => setRouteLimit(Math.round(value))}
+                  minimumTrackTintColor={COLORS.primary}
+                  maximumTrackTintColor={COLORS.border}
+                  thumbTintColor={COLORS.accent}
                 />
-              ))}
-            </Menu>
-            <Text variant="bodySmall" style={styles.limitHint}>
-              Plus de trajets = plus d'options, mais temps de calcul plus long
-            </Text>
+
+                <View style={styles.sliderLabels}>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <Text
+                      key={n}
+                      style={[
+                        styles.sliderLabel,
+                        routeLimit === n && styles.sliderLabelActive,
+                      ]}
+                    >
+                      {n}
+                    </Text>
+                  ))}
+                </View>
+
+                <Text style={styles.limitHint}>
+                  {getRouteLimitLabel(routeLimit)} — Plus de trajets = plus d'options, temps de calcul plus long
+                </Text>
+              </View>
+            </View>
           </View>
 
           {error && (
@@ -184,6 +236,8 @@ export default function HomeScreen({ navigation }: Props) {
             disabled={!canSearch}
             style={styles.button}
             contentStyle={styles.buttonContent}
+            buttonColor={COLORS.primary}
+            textColor={COLORS.textLight}
           >
             Décomposer
           </Button>
@@ -194,10 +248,11 @@ export default function HomeScreen({ navigation }: Props) {
             style={styles.suggestButton}
             contentStyle={styles.suggestButtonContent}
             icon="plus"
+            textColor={COLORS.primary}
           >
             Suggérer un trajet
           </Button>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -206,60 +261,206 @@ export default function HomeScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.background,
   },
   flex: {
     flex: 1,
   },
-  content: {
-    flex: 1,
-    padding: 20,
-    paddingTop: 12,
+  header: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 24,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  headerContent: {
+    zIndex: 2,
+  },
+  appTitle: {
+    fontFamily: FONTS.heading,
+    fontSize: 34,
+    fontWeight: '700',
+    color: COLORS.accent,
+    letterSpacing: 0.5,
+  },
+  appSubtitle: {
+    fontSize: 14,
+    color: COLORS.textLight,
+    opacity: 0.85,
+    marginTop: 4,
+    letterSpacing: 0.3,
+  },
+  headerAccent: {
+    position: 'absolute',
+    right: -40,
+    top: -40,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: COLORS.accent,
+    opacity: 0.15,
+    zIndex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    marginBottom: 16,
+    position: 'relative',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+  },
+  searchCard: {
+    zIndex: 10,
+    elevation: 10,
+  },
+  optimizationCard: {
+    zIndex: 1,
+  },
+  cardAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: COLORS.accent,
+    borderTopLeftRadius: 16,
+    borderBottomLeftRadius: 16,
+    zIndex: 2,
+  },
+  cardContent: {
+    padding: 16,
+    overflow: 'visible',
   },
   sectionLabel: {
-    marginBottom: 6,
-    marginTop: 8,
-  },
-  segmented: {
+    fontFamily: FONTS.heading,
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.primary,
+    marginBottom: 8,
     marginTop: 4,
+    letterSpacing: 0.3,
+  },
+  optimizeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  optimizeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.accent,
+    borderWidth: 1.5,
+    borderColor: COLORS.accent,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+  },
+  optimizeButtonSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  optimizeButtonText: {
+    fontFamily: FONTS.heading,
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+    letterSpacing: 0.3,
+  },
+  optimizeButtonTextSelected: {
+    color: COLORS.textLight,
   },
   limitContainer: {
     marginTop: 16,
+    marginBottom: 4,
+  },
+  limitHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
   limitLabel: {
-    marginBottom: 6,
+    fontFamily: FONTS.heading,
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+    letterSpacing: 0.3,
+  },
+  limitValueBadge: {
+    backgroundColor: COLORS.primary,
+    minWidth: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+  },
+  limitValueText: {
+    fontFamily: FONTS.heading,
+    color: COLORS.textLight,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+    marginHorizontal: -4, // slight correction for the thumb padding
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginTop: -8,
+    marginBottom: 8,
+  },
+  sliderLabel: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontFamily: FONTS.heading,
     fontWeight: '500',
   },
-  limitButton: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    borderColor: '#6200ee',
-  },
-  limitButtonContent: {
-    paddingVertical: 4,
+  sliderLabelActive: {
+    color: COLORS.primary,
+    fontWeight: '700',
   },
   limitHint: {
-    color: '#888',
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontStyle: 'italic',
     marginTop: 4,
-    fontSize: 11,
+    lineHeight: 16,
   },
   error: {
     color: '#B00020',
-    marginTop: 12,
+    marginBottom: 12,
     fontSize: 13,
+    textAlign: 'center',
   },
   button: {
-    marginTop: 16,
-    borderRadius: 8,
+    marginTop: 8,
+    borderRadius: 12,
+    elevation: 3,
   },
   buttonContent: {
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   suggestButton: {
     marginTop: 12,
-    borderRadius: 8,
-    borderColor: '#6200ee',
+    borderRadius: 12,
+    borderColor: COLORS.primary,
+    borderWidth: 1.5,
   },
   suggestButtonContent: {
     paddingVertical: 6,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, FlatList, View, ScrollView } from 'react-native';
-import { Text, Appbar, Button, Card, Chip, Divider } from 'react-native-paper';
+import { StyleSheet, FlatList, View } from 'react-native';
+import { Text, Appbar, Button } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -8,7 +8,15 @@ import RouteCard from '../components/RouteCard';
 import { RootStackParamList, CalculatedRoute, SuggestedConnection } from '../types';
 import { getPendingSuggestions } from '../services/api';
 import { useDeviceId } from '../hooks/useDeviceId';
-import { TRANSPORT_LABELS, TRANSPORT_ICONS } from '../constants/transport';
+import { TRANSPORT_LABELS } from '../constants/transport';
+import { COLORS, FONTS } from '../constants/theme';
+import TransportIcon from '../components/TransportIcon';
+
+import MapIcon from '../../assets/icons/map.svg';
+import CheckCircleIcon from '../../assets/icons/check-circle.svg';
+import BoltIcon from '../../assets/icons/bolt.svg';
+import CoinsIcon from '../../assets/icons/coins.svg';
+import ScaleIcon from '../../assets/icons/scale.svg';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Results'>;
 
@@ -18,12 +26,6 @@ const OPTIMIZE_LABELS = {
   balanced: 'les plus équilibrés',
 };
 
-const OPTIMIZE_EMOJIS = {
-  price: '💰',
-  time: '⚡',
-  balanced: '⚖️',
-};
-
 export default function ResultsScreen({ navigation, route }: Props) {
   const deviceId = useDeviceId();
   const {
@@ -31,19 +33,16 @@ export default function ResultsScreen({ navigation, route }: Props) {
     destinationName,
     optimizeBy,
     routes,
-    routeLimit = 1
+    routeLimit = 1,
   } = route.params;
   const [contextualSuggestions, setContextualSuggestions] = useState<SuggestedConnection[]>([]);
   const [showContextual, setShowContextual] = useState(false);
-  const [selectedRouteIndex, setSelectedRouteIndex] = useState<number | null>(null);
 
-  // Fetch contextual suggestions based on the search
   useEffect(() => {
     const fetchContextualSuggestions = async () => {
       if (!deviceId) return;
       try {
         const data = await getPendingSuggestions(deviceId);
-        // Filter suggestions that are relevant to this search
         const matching = data.suggestions.filter(s =>
           s.fromStop.commune === originName ||
           s.toStop.commune === destinationName ||
@@ -53,9 +52,7 @@ export default function ResultsScreen({ navigation, route }: Props) {
 
         setContextualSuggestions(matching);
         setShowContextual(matching.length > 0);
-      } catch {
-        // Silently fail
-      }
+      } catch {}
     };
     fetchContextualSuggestions();
   }, [deviceId, originName, destinationName]);
@@ -77,93 +74,79 @@ export default function ResultsScreen({ navigation, route }: Props) {
     navigation.navigate('Home');
   };
 
-  // Render comparison header
+  // Comparison header
   const renderComparisonHeader = () => {
     if (routes.length <= 1) return null;
 
-    // Find which routes have special status
     const fastest = routes.find(r => r.isFastest);
     const cheapest = routes.find(r => r.isCheapest);
     const bestBalanced = routes.find(r => r.isBestBalanced);
 
     return (
-      <View style={styles.comparisonHeader}>
-        <Text style={styles.comparisonTitle}>📊 Comparez vos options</Text>
-        <View style={styles.comparisonGrid}>
-          {fastest && (
-            <View style={styles.comparisonItem}>
-              <Text style={styles.comparisonEmoji}>⚡</Text>
-              <Text style={styles.comparisonLabel}>Plus rapide</Text>
-              <Text style={styles.comparisonValue}>
-                {fastest.totalDuration} min
-              </Text>
-              <Text style={styles.comparisonPrice}>
-                {fastest.totalPrice} CFA
-              </Text>
-            </View>
-          )}
-          {cheapest && cheapest.id !== fastest?.id && (
-            <View style={styles.comparisonItem}>
-              <Text style={styles.comparisonEmoji}>💰</Text>
-              <Text style={styles.comparisonLabel}>Moins cher</Text>
-              <Text style={styles.comparisonValue}>
-                {cheapest.totalPrice} CFA
-              </Text>
-              <Text style={styles.comparisonPrice}>
-                {cheapest.totalDuration} min
-              </Text>
-            </View>
-          )}
-          {bestBalanced && bestBalanced.id !== fastest?.id && bestBalanced.id !== cheapest?.id && (
-            <View style={styles.comparisonItem}>
-              <Text style={styles.comparisonEmoji}>⚖️</Text>
-              <Text style={styles.comparisonLabel}>Équilibré</Text>
-              <Text style={styles.comparisonValue}>
-                {bestBalanced.totalPrice} CFA
-              </Text>
-              <Text style={styles.comparisonPrice}>
-                {bestBalanced.totalDuration} min
-              </Text>
-            </View>
-          )}
+      <View style={styles.comparisonCard}>
+        <View style={styles.comparisonAccent} />
+        <View style={styles.comparisonContent}>
+          <Text style={styles.comparisonTitle}>Comparez vos options</Text>
+          <View style={styles.comparisonGrid}>
+            {fastest && (
+              <View style={styles.comparisonItem}>
+                <BoltIcon width={20} height={20} fill={COLORS.highlight} />
+                <Text style={styles.comparisonLabel}>Plus rapide</Text>
+                <Text style={styles.comparisonValue}>{fastest.totalDuration} min</Text>
+                <Text style={styles.comparisonPrice}>{fastest.totalPrice} CFA</Text>
+              </View>
+            )}
+            {cheapest && cheapest.id !== fastest?.id && (
+              <View style={styles.comparisonItem}>
+                <CoinsIcon width={20} height={20} fill={COLORS.accent} />
+                <Text style={styles.comparisonLabel}>Moins cher</Text>
+                <Text style={styles.comparisonValue}>{cheapest.totalPrice} CFA</Text>
+                <Text style={styles.comparisonPrice}>{cheapest.totalDuration} min</Text>
+              </View>
+            )}
+            {bestBalanced && bestBalanced.id !== fastest?.id && bestBalanced.id !== cheapest?.id && (
+              <View style={styles.comparisonItem}>
+                <ScaleIcon width={20} height={20} fill={COLORS.primary} />
+                <Text style={styles.comparisonLabel}>Équilibré</Text>
+                <Text style={styles.comparisonValue}>{bestBalanced.totalPrice} CFA</Text>
+                <Text style={styles.comparisonPrice}>{bestBalanced.totalDuration} min</Text>
+              </View>
+            )}
+          </View>
         </View>
       </View>
     );
   };
 
-  // Render header with journey info
+  // Header with journey info
   const renderHeader = () => (
     <View style={styles.listHeader}>
-      <View style={styles.journeySummary}>
-        <View style={styles.journeyRow}>
-          <View style={styles.journeyPoint}>
-            <View style={[styles.dot, styles.originDot]} />
-            <Text style={styles.journeyLabel}>De</Text>
-            <Text variant="titleMedium" style={styles.journeyStop}>
-              {originName}
-            </Text>
+      <View style={styles.journeyCard}>
+        <View style={styles.journeyAccent} />
+        <View style={styles.journeyContent}>
+          <View style={styles.journeyRow}>
+            <View style={styles.journeyPoint}>
+              <View style={[styles.dot, styles.originDot]} />
+              <Text style={styles.journeyLabel}>De</Text>
+              <Text style={styles.journeyStop}>{originName}</Text>
+            </View>
+            <Text style={styles.arrow}>↓</Text>
+            <View style={styles.journeyPoint}>
+              <View style={[styles.dot, styles.destinationDot]} />
+              <Text style={styles.journeyLabel}>À</Text>
+              <Text style={styles.journeyStop}>{destinationName}</Text>
+            </View>
           </View>
-          <Text style={styles.arrow}>↓</Text>
-          <View style={styles.journeyPoint}>
-            <View style={[styles.dot, styles.destinationDot]} />
-            <Text style={styles.journeyLabel}>À</Text>
-            <Text variant="titleMedium" style={styles.journeyStop}>
-              {destinationName}
+          <View style={styles.journeyMeta}>
+            <Text style={styles.routeCount}>
+              {routes.length} trajet{routes.length > 1 ? 's' : ''} trouvé{routes.length > 1 ? 's' : ''}
             </Text>
+            <View style={styles.optimizeBadge}>
+              <Text style={styles.optimizeBadgeText}>
+                {OPTIMIZE_LABELS[optimizeBy]}
+              </Text>
+            </View>
           </View>
-        </View>
-        <View style={styles.journeyMeta}>
-          <Text style={styles.routeCount}>
-            {routes.length} trajet{routes.length > 1 ? 's' : ''} trouvé{routes.length > 1 ? 's' : ''}
-          </Text>
-          <Text style={styles.optimizeBadge}>
-            {OPTIMIZE_EMOJIS[optimizeBy]} {OPTIMIZE_LABELS[optimizeBy]}
-          </Text>
-          {routeLimit > 1 && (
-            <Text style={styles.routeLimitBadge}>
-              Max : {routeLimit} trajets
-            </Text>
-          )}
         </View>
       </View>
 
@@ -171,14 +154,17 @@ export default function ResultsScreen({ navigation, route }: Props) {
     </View>
   );
 
-  // Render contextual suggestions
+  // Contextual suggestions
   const renderContextualPrompt = () => (
-    <Card style={styles.contextualCard}>
-      <Card.Content>
+    <View style={styles.contextualCard}>
+      <View style={styles.contextualAccent} />
+      <View style={styles.contextualContent}>
         <View style={styles.contextualHeader}>
-          <Text style={styles.contextualIcon}>💡</Text>
+          <View style={styles.contextualIconCircle}>
+            <CheckCircleIcon width={20} height={20} fill={COLORS.primary} />
+          </View>
           <View style={styles.contextualText}>
-            <Text style={styles.contextualTitle}>Aidez à vérifier les trajets !</Text>
+            <Text style={styles.contextualTitle}>Aidez à vérifier les trajets</Text>
             <Text style={styles.contextualSubtitle}>
               {contextualSuggestions.length} trajet{contextualSuggestions.length > 1 ? 's' : ''} en attente près de votre recherche
             </Text>
@@ -190,9 +176,12 @@ export default function ResultsScreen({ navigation, route }: Props) {
               {s.fromStop.name} → {s.toStop.name}
             </Text>
             <View style={styles.contextualMeta}>
-              <Chip compact style={styles.contextualChip}>
-                {TRANSPORT_ICONS[s.transportType]} {TRANSPORT_LABELS[s.transportType]}
-              </Chip>
+              <View style={styles.contextualChip}>
+                <TransportIcon type={s.transportType} size={12} />
+                <Text style={styles.contextualChipText}>
+                  {TRANSPORT_LABELS[s.transportType]}
+                </Text>
+              </View>
               <Text style={styles.contextualPrice}>{s.basePrice} CFA</Text>
               <Text style={styles.contextualDuration}>• {s.durationMinutes} min</Text>
             </View>
@@ -202,35 +191,41 @@ export default function ResultsScreen({ navigation, route }: Props) {
           mode="contained"
           onPress={handleConfirmSuggestion}
           style={styles.contextualButton}
-          compact
+          contentStyle={styles.contextualButtonContent}
+          buttonColor={COLORS.primary}
+          textColor={COLORS.textLight}
         >
           Confirmer les trajets
         </Button>
-      </Card.Content>
-    </Card>
+      </View>
+    </View>
   );
 
-  // Render empty state
+  // Empty state
   const renderEmpty = () => (
     <View style={styles.empty}>
-      <Text style={styles.emptyIcon}>🗺️</Text>
-      <Text variant="bodyLarge" style={styles.emptyText}>
-        Aucun trajet trouvé entre ces deux arrêts.
-      </Text>
-      <Text variant="bodySmall" style={styles.emptyHint}>
+      <View style={styles.emptyIconCircle}>
+        <MapIcon width={40} height={40} fill={COLORS.primary} />
+      </View>
+      <Text style={styles.emptyTitle}>Aucun trajet trouvé</Text>
+      <Text style={styles.emptyText}>
+        Aucun itinéraire n'a été trouvé entre ces deux arrêts.
         Essaie d'autres points de départ ou de destination.
       </Text>
       <Button
         mode="contained"
         onPress={handleNewSearch}
         style={styles.emptyButton}
+        contentStyle={styles.emptyButtonContent}
+        buttonColor={COLORS.primary}
+        textColor={COLORS.textLight}
       >
         Nouvelle recherche
       </Button>
     </View>
   );
 
-  // Render footer with new search button
+  // Footer
   const renderFooter = () => (
     <View style={styles.footer}>
       <Button
@@ -239,6 +234,7 @@ export default function ResultsScreen({ navigation, route }: Props) {
         style={styles.newSearchButton}
         contentStyle={styles.newSearchButtonContent}
         icon="arrow-left"
+        textColor={COLORS.primary}
       >
         Nouvelle recherche
       </Button>
@@ -247,17 +243,18 @@ export default function ResultsScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Appbar.Header>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
+      <Appbar.Header style={styles.appbar}>
+        <Appbar.BackAction onPress={() => navigation.goBack()} color={COLORS.textLight} />
         <Appbar.Content
           title="Résultats"
           subtitle={`${routes.length} trajet${routes.length > 1 ? 's' : ''}`}
+          titleStyle={styles.appbarTitle}
+          subtitleStyle={styles.appbarSubtitle}
         />
         <Appbar.Action
           icon="refresh"
-          onPress={() => {
-            navigation.goBack();
-          }}
+          onPress={() => navigation.goBack()}
+          color={COLORS.textLight}
         />
       </Appbar.Header>
 
@@ -293,7 +290,20 @@ export default function ResultsScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.background,
+  },
+  appbar: {
+    backgroundColor: COLORS.primary,
+  },
+  appbarTitle: {
+    fontFamily: FONTS.heading,
+    color: COLORS.textLight,
+    fontWeight: '700',
+  },
+  appbarSubtitle: {
+    color: COLORS.textLight,
+    opacity: 0.75,
+    fontSize: 12,
   },
   list: {
     padding: 16,
@@ -303,55 +313,71 @@ const styles = StyleSheet.create({
   listHeader: {
     marginBottom: 16,
   },
-  journeySummary: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+
+  // Journey card
+  journeyCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
     marginBottom: 12,
+    position: 'relative',
+    overflow: 'hidden',
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+  },
+  journeyAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: COLORS.accent,
+  },
+  journeyContent: {
+    padding: 16,
   },
   journeyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
   },
   journeyPoint: {
     flex: 1,
     alignItems: 'center',
   },
   journeyLabel: {
-    color: '#888',
+    fontFamily: FONTS.heading,
+    color: COLORS.textMuted,
     textTransform: 'uppercase',
     fontSize: 10,
     letterSpacing: 0.5,
-    marginBottom: 2,
+    marginBottom: 4,
+    fontWeight: '600',
   },
   journeyStop: {
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontFamily: FONTS.heading,
+    fontWeight: '700',
+    color: COLORS.primary,
     fontSize: 16,
     textAlign: 'center',
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginBottom: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginBottom: 6,
   },
   originDot: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: COLORS.accent,
   },
   destinationDot: {
-    backgroundColor: '#f44336',
+    backgroundColor: COLORS.highlight,
   },
   arrow: {
     fontSize: 20,
-    color: '#888',
+    color: COLORS.textMuted,
     marginHorizontal: 8,
   },
   journeyMeta: {
@@ -359,48 +385,58 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 8,
-    marginTop: 12,
+    marginTop: 16,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: COLORS.surfaceAlt,
   },
   routeCount: {
     fontSize: 13,
-    color: '#555',
+    color: COLORS.textMuted,
     fontWeight: '500',
   },
   optimizeBadge: {
+    backgroundColor: COLORS.surfaceAlt,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  optimizeBadgeText: {
+    fontFamily: FONTS.heading,
     fontSize: 12,
-    color: '#6200ee',
-    backgroundColor: '#f0e6ff',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-    fontWeight: '500',
+    color: COLORS.primary,
+    fontWeight: '600',
   },
-  routeLimitBadge: {
-    fontSize: 11,
-    color: '#888',
-    backgroundColor: '#f5f5f5',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  comparisonHeader: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+
+  // Comparison card
+  comparisonCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
     marginBottom: 12,
+    position: 'relative',
+    overflow: 'hidden',
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+  },
+  comparisonAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: COLORS.highlight,
+  },
+  comparisonContent: {
+    padding: 16,
   },
   comparisonTitle: {
+    fontFamily: FONTS.heading,
     fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontWeight: '700',
+    color: COLORS.primary,
     marginBottom: 12,
   },
   comparisonGrid: {
@@ -411,124 +447,182 @@ const styles = StyleSheet.create({
   },
   comparisonItem: {
     flex: 1,
-    minWidth: 80,
+    minWidth: 90,
     alignItems: 'center',
-    padding: 8,
-    backgroundColor: '#f8f8f8',
-    borderRadius: 8,
-  },
-  comparisonEmoji: {
-    fontSize: 20,
-    marginBottom: 2,
+    padding: 10,
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: 10,
+    gap: 4,
   },
   comparisonLabel: {
+    fontFamily: FONTS.heading,
     fontSize: 11,
-    color: '#666',
-    fontWeight: '500',
+    color: COLORS.textMuted,
+    fontWeight: '600',
+    marginTop: 2,
   },
   comparisonValue: {
+    fontFamily: FONTS.heading,
     fontSize: 16,
     fontWeight: '700',
-    color: '#1a1a1a',
+    color: COLORS.primary,
     marginTop: 2,
   },
   comparisonPrice: {
-    fontSize: 13,
-    color: '#888',
+    fontSize: 12,
+    color: COLORS.textMuted,
   },
+
+  // Contextual card
   contextualCard: {
-    backgroundColor: '#E8F5E9',
-    borderRadius: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#C8E6C9',
+    position: 'relative',
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+  },
+  contextualAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: COLORS.highlight,
+  },
+  contextualContent: {
+    padding: 16,
   },
   contextualHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  contextualIcon: {
-    fontSize: 20,
-    marginRight: 10,
+  contextualIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   contextualText: {
     flex: 1,
   },
   contextualTitle: {
+    fontFamily: FONTS.heading,
     fontSize: 14,
-    fontWeight: '600',
-    color: '#2E7D32',
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   contextualSubtitle: {
     fontSize: 12,
-    color: '#388E3C',
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
   contextualSuggestion: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 10,
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: 10,
+    padding: 12,
     marginBottom: 8,
   },
   contextualRoute: {
+    fontFamily: FONTS.heading,
     fontSize: 13,
-    fontWeight: '500',
-    color: '#1a1a1a',
+    fontWeight: '600',
+    color: COLORS.primary,
   },
   contextualMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 4,
+    marginTop: 6,
   },
   contextualChip: {
-    height: 24,
-    backgroundColor: '#f0f0f0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  contextualChipText: {
+    fontFamily: FONTS.heading,
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '600',
   },
   contextualPrice: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   contextualDuration: {
     fontSize: 12,
-    color: '#888',
+    color: COLORS.textMuted,
   },
   contextualButton: {
-    borderRadius: 8,
+    borderRadius: 12,
     marginTop: 4,
+    elevation: 2,
   },
+  contextualButtonContent: {
+    paddingVertical: 4,
+  },
+
+  // Empty state
   empty: {
     alignItems: 'center',
     paddingVertical: 60,
     paddingHorizontal: 24,
   },
-  emptyIcon: {
-    fontSize: 48,
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 16,
+  },
+  emptyTitle: {
+    fontFamily: FONTS.heading,
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 8,
   },
   emptyText: {
     textAlign: 'center',
-    color: '#444',
-    marginBottom: 8,
-    fontSize: 16,
-  },
-  emptyHint: {
-    textAlign: 'center',
-    color: '#888',
+    color: COLORS.textMuted,
     marginBottom: 24,
+    fontSize: 14,
+    lineHeight: 20,
   },
   emptyButton: {
-    borderRadius: 8,
+    borderRadius: 12,
+    elevation: 3,
   },
+  emptyButtonContent: {
+    paddingVertical: 6,
+  },
+
+  // Footer
   footer: {
     paddingTop: 8,
     paddingBottom: 8,
   },
   newSearchButton: {
-    borderRadius: 8,
-    borderColor: '#6200ee',
+    borderRadius: 12,
+    borderColor: COLORS.primary,
+    borderWidth: 1.5,
   },
   newSearchButtonContent: {
     paddingVertical: 6,

@@ -5,12 +5,13 @@ import { TextInput, Text, ActivityIndicator } from 'react-native-paper';
 import { useDebounce } from '../hooks/useDebounce';
 import { searchStops } from '../services/api';
 import { Stop } from '../types';
+import { COLORS, FONTS } from '../constants/theme';
 
 interface Props {
   label: string;
   onStopSelected: (stop: Stop | null) => void;
   selectedStop: Stop | null;
-  zIndex?: number; // controls stacking order relative to sibling inputs
+  zIndex?: number;
 }
 
 export default function StopSearchInput({ label, onStopSelected, selectedStop, zIndex = 1 }: Props) {
@@ -23,7 +24,6 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop, z
 
   const debouncedQuery = useDebounce(query, 400);
 
-  // When a stop is selected externally, update the query
   useEffect(() => {
     if (selectedStop) {
       setQuery(selectedStop.name);
@@ -32,7 +32,6 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop, z
   }, [selectedStop]);
 
   useEffect(() => {
-    // Only search if the input is actually focused — prevents ghost searches
     if (!isFocused || debouncedQuery.length < 2) {
       setResults([]);
       setIsOpen(false);
@@ -46,19 +45,16 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop, z
       setIsLoading(true);
       setError(null);
       try {
-        console.log('🔍 Searching for:', debouncedQuery);
         const stops = await searchStops(debouncedQuery);
-        console.log(`✅ Found ${stops.length} stops:`, stops.map(s => s.name).join(', '));
         if (!cancelled) {
           setResults(stops);
           setIsOpen(stops.length > 0);
         }
       } catch (err) {
-        console.error('❌ Search error:', err);
         if (!cancelled) {
           setResults([]);
           setIsOpen(false);
-          setError(err instanceof Error ? err.message : 'Failed to search stops');
+          setError(err instanceof Error ? err.message : 'Erreur de recherche');
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -70,7 +66,6 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop, z
   }, [debouncedQuery, isFocused]);
 
   const handleSelect = useCallback((stop: Stop) => {
-    console.log('✅ Selected stop:', stop.name);
     onStopSelected(stop);
     setQuery(stop.name);
     setResults([]);
@@ -87,16 +82,9 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop, z
     }
   }, [selectedStop, onStopSelected]);
 
-  const handleFocus = useCallback(() => {
-    setIsFocused(true);
-    // If we have a query, trigger search on focus
-    if (query.length >= 2) {
-      // The useEffect will handle the search
-    }
-  }, [query]);
+  const handleFocus = useCallback(() => setIsFocused(true), []);
 
   const handleBlur = useCallback(() => {
-    // Small delay so tapping a suggestion registers before the list closes
     setTimeout(() => {
       setIsOpen(false);
       setIsFocused(false);
@@ -112,9 +100,13 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop, z
         onFocus={handleFocus}
         onBlur={handleBlur}
         mode="outlined"
-        right={isLoading ? <TextInput.Icon icon={() => <ActivityIndicator size={16} />} /> : null}
+        right={isLoading ? <TextInput.Icon icon={() => <ActivityIndicator size={16} color={COLORS.primary} />} /> : null}
         autoCorrect={false}
         autoCapitalize="none"
+        outlineColor={COLORS.border}
+        activeOutlineColor={COLORS.primary}
+        style={styles.input}
+        theme={{ colors: { background: COLORS.surface } }}
       />
 
       {error && (
@@ -133,6 +125,7 @@ export default function StopSearchInput({ label, onStopSelected, selectedStop, z
               <TouchableOpacity
                 style={styles.suggestion}
                 onPress={() => handleSelect(item)}
+                activeOpacity={0.7}
               >
                 <Text style={styles.suggestionName}>{item.name}</Text>
                 <Text style={styles.suggestionCommune}>{item.commune}</Text>
@@ -149,35 +142,43 @@ const styles = StyleSheet.create({
   container: {
     position: 'relative',
     marginBottom: 12,
+    overflow: 'visible',
+  },
+  input: {
+    backgroundColor: COLORS.surface,
   },
   dropdown: {
     position: 'absolute',
     top: 58,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
-    borderRadius: 4,
-    elevation: 4,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
-    shadowRadius: 4,
-    maxHeight: 200,
-    zIndex: 999,
+    shadowRadius: 12,
+    maxHeight: 240,
+    zIndex: 9999,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
   },
   suggestion: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: COLORS.surfaceAlt,
   },
   suggestionName: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
+    color: COLORS.textDark,
   },
   suggestionCommune: {
     fontSize: 12,
-    color: '#888',
+    color: COLORS.textMuted,
     marginTop: 2,
   },
   errorText: {

@@ -1,3 +1,7 @@
+// ─── Shared Transport Types ────────────────────────────────────────────────
+
+export type TransportType = 'communal_taxi' | 'gbaka' | 'sotra_bus' | 'walking';
+
 // ─── Navigation ───────────────────────────────────────────────────────────────
 
 export type RootStackParamList = {
@@ -32,7 +36,7 @@ export interface Stop {
 }
 
 export interface RouteStep {
-  type: 'communal_taxi' | 'gbaka' | 'sotra_bus' | 'walking';
+  type: TransportType;
   from: string;        // Stop name
   to: string;          // Stop name
   price: number;
@@ -232,18 +236,16 @@ export function formatWalkingDistance(meters: number): string {
  * Helper to get trust score color
  */
 export function getTrustScoreColor(score: number): string {
-  if (score >= 80) return '#4CAF50'; // Green
-  if (score >= 60) return '#FFC107'; // Yellow
-  if (score >= 40) return '#FF9800'; // Orange
-  return '#F44336'; // Red
+  if (score >= 70) return '#1A4A4A'; // Deep Teal
+  if (score >= 40) return '#D4A843'; // Warm Gold
+  return '#B00020';                   // Error red
 }
 
 /**
  * Helper to get trust score label
  */
 export function getTrustScoreLabel(score: number): string {
-  if (score >= 80) return 'High Trust';
-  if (score >= 60) return 'Good Trust';
-  if (score >= 40) return 'Medium Trust';
-  return 'Low Trust';
+  if (score >= 70) return 'Haute confiance';
+  if (score >= 40) return 'Confiance moyenne';
+  return 'Faible confiance';
 }
