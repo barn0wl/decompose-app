@@ -1,3 +1,10 @@
+export interface ApiErrorBody {
+  error: string;       // e.g. 'NO_VALID_ROUTE' or a plain message
+  message?: string;
+  hint?: string;
+  context?: Record<string, unknown>;
+}
+
 // ─── Shared Transport Types ────────────────────────────────────────────────
 
 export type TransportType = 'communal_taxi' | 'gbaka' | 'sotra_bus' | 'walking';

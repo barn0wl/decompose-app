@@ -1,13 +1,20 @@
 import { TransportType } from '../../generated/prisma';
 import { buildGraph, GraphEdge, RouteGraph } from './graph.builder';
+import { WalkingPolicy, DEFAULT_WALKING_POLICY } from './walking-policy';
+import { filterWalkingHeavy } from './walking-filter';
+import { getCompositeDurationMultiplier } from '../duration-patterns'
 import prisma from '../lib/prisma';
+
+// ─── INTERFACES ───────────────────────────────────────────────────────────
 
 export interface RouteStep {
   type: TransportType;
   from: string;
   to: string;
   price: number;
-  duration: number;
+  duration: number;              // effective duration (backwards compat)
+  baseDuration: number;          // ← NEW
+  effectiveDuration: number;     // ← NEW (same as duration)
   instructions: string;
   connectionId?: string;
   stepIndex?: number;
@@ -17,10 +24,19 @@ export interface RouteStep {
   toLongitude?: number;
 }
 
+export interface DurationContext {   // ← NEW
+  at: Date;
+  timeOfDayLabel: string;
+  durationMultiplier: number;
+}
+
 export interface CalculatedRoute {
   id: string;
   totalPrice: number;
-  totalDuration: number;
+  totalDuration: number;            // effective duration (backwards compat)
+  totalBaseDuration: number;        // ← NEW
+  totalEffectiveDuration: number;   // ← NEW
+  durationContext: DurationContext; // ← NEW
   steps: RouteStep[];
   trustScore?: {
     score: number;
@@ -41,100 +57,105 @@ interface PathEntry {
 
 type WeightKey = 'price' | 'duration' | 'balanced';
 
-// Constants for route optimization
+// ─── CONFIGURATION ────────────────────────────────────────────────────────
+
 const MAX_ROUTES_TO_RETURN = 5;
-const BALANCED_PRICE_WEIGHT = 0.3; // 30% weight to price
-const BALANCED_DURATION_WEIGHT = 0.7; // 70% weight to duration
+const BALANCED_PRICE_WEIGHT = 0.3;
+const BALANCED_DURATION_WEIGHT = 0.7;
+
+// ─── ERROR ────────────────────────────────────────────────────────────────
+
+export class NoValidRouteError extends Error {
+  code = 'NO_VALID_ROUTE';
+  hint = 'Try optimizing by time or balanced instead of price.';
+  constructor(message: string) {
+    super(message);
+    this.name = 'NoValidRouteError';
+  }
+}
+
+// ─── SERVICE ──────────────────────────────────────────────────────────────
 
 class RoutingService {
   private graphCache: RouteGraph | null = null;
   private lastBuildTime: number = 0;
-  private readonly cacheTTL: number = 300000; // 5 minutes
+  private readonly cacheTTL: number = 300000; // 5 min
 
-  /**
-   * Calculate route(s) between two stops
-   */
   async calculateRoute(
     originStopId: string,
     destinationStopId: string,
     optimizeBy: 'price' | 'time' | 'balanced' = 'price',
-    limit: number = 1
+    limit: number = 1,
+    walkingPolicy: WalkingPolicy = DEFAULT_WALKING_POLICY,
+    context?: { at?: Date; useEffectiveDuration?: boolean }   // ← NEW
   ): Promise<CalculatedRoute[]> {
-    // Validate inputs
+
     if (!originStopId || !destinationStopId) {
       throw new Error('Origin and destination stop IDs are required');
     }
-
     if (originStopId === destinationStopId) {
       throw new Error('Origin and destination cannot be the same stop');
     }
 
-    // Limit maximum routes
-    const routeLimit = Math.min(Math.max(1, limit), MAX_ROUTES_TO_RETURN);
+    // ← NEW: resolve duration context
+    const at = context?.at ?? new Date();
+    const useEffectiveDuration = context?.useEffectiveDuration ?? true;
+    const durationContext = getCompositeDurationMultiplier(at);
 
-    // Get graph
+    const routeLimit = Math.min(Math.max(1, limit), MAX_ROUTES_TO_RETURN);
     const graph = await this.getGraph();
 
-    // Validate stops exist in graph
     await this.ensureStopInGraph(originStopId, graph);
     await this.ensureStopInGraph(destinationStopId, graph);
 
-    // Determine weight key
     const weightKey: WeightKey =
       optimizeBy === 'price' ? 'price' :
       optimizeBy === 'time' ? 'duration' : 'balanced';
 
-    // Pre-fetch all vote stats for the entire graph (once per route calculation)
     const voteStatsMap = await this.fetchAllVoteStats(graph);
 
-    // Find routes
-    let routes: GraphEdge[][];
+    // ── Attempt 1: single shortest path ──────────────────────────────
     if (routeLimit === 1) {
-      const result = await this.dijkstra(
-        graph.edges,
-        originStopId,
-        destinationStopId,
-        weightKey,
-        voteStatsMap
+      const single = await this.dijkstra(
+        graph.edges, originStopId, destinationStopId,
+        weightKey, voteStatsMap, walkingPolicy,
+        durationContext, useEffectiveDuration                 // ← NEW
       );
-      routes = result ? [result.steps] : [];
-    } else {
-      routes = await this.yenAlgorithm(
-        graph.edges,
-        originStopId,
-        destinationStopId,
-        weightKey,
-        routeLimit,
-        voteStatsMap
-      );
+
+      if (single) {
+        const filterResult = filterWalkingHeavy(single.steps, walkingPolicy);
+        if (filterResult.passes) {
+          const formatted = await this.formatRoutes([single.steps], optimizeBy, durationContext); // ← NEW arg
+          return this.addRouteComparison(formatted, optimizeBy);
+        }
+      }
     }
 
-    if (routes.length === 0) {
-      throw new Error('No route found between these stops');
-    }
-
-    // Format routes with rankings
-    const formattedRoutes = await this.formatRoutes(routes, optimizeBy);
-
-    // Compute trust scores for all routes (in parallel for performance)
-    const routesWithScores = await Promise.all(
-      formattedRoutes.map(async (route, index) => {
-        const trustScore = await this.computeRouteTrustScore(route);
-        return {
-          ...route,
-          trustScore,
-          rank: index + 1,
-        };
-      })
+    // ── Attempt 2: k-shortest fallback ───────────────────────────────
+    const K = Math.max(routeLimit, 5);
+    const candidates = await this.yenAlgorithm(
+      graph.edges, originStopId, destinationStopId,
+      weightKey, K, voteStatsMap, walkingPolicy,
+      durationContext, useEffectiveDuration                   // ← NEW
     );
 
-    // Add comparison metadata
-    return this.addRouteComparison(routesWithScores, optimizeBy);
+    const passing = candidates.filter(p =>
+      filterWalkingHeavy(p, walkingPolicy).passes
+    );
+
+    if (passing.length === 0) {
+      throw new NoValidRouteError(
+        'No viable route found under current walking constraints.'
+      );
+    }
+
+    const formatted = await this.formatRoutes(
+      passing.slice(0, routeLimit), optimizeBy, durationContext  // ← NEW arg
+    );
+    return this.addRouteComparison(formatted, optimizeBy);
   }
 
-  /**
-   * Fetch all vote stats for the graph in a single query
-   */
+  // ─── Vote stats (unchanged) ─────────────────────────────────────────
   private async fetchAllVoteStats(
     graph: RouteGraph
   ): Promise<Map<string, { upvotes: number; downvotes: number }>> {
@@ -146,71 +167,105 @@ class RoutingService {
         }
       }
     }
-
-    if (allConnectionIds.size === 0) {
-      return new Map();
-    }
+    if (allConnectionIds.size === 0) return new Map();
 
     const voteStats = await prisma.connection.findMany({
-      where: {
-        id: { in: [...allConnectionIds] },
-      },
-      select: {
-        id: true,
-        upvotes: true,
-        downvotes: true,
-      },
+      where: { id: { in: [...allConnectionIds] } },
+      select: { id: true, upvotes: true, downvotes: true },
     });
 
-    return new Map(
-      voteStats.map(v => [v.id, { upvotes: v.upvotes, downvotes: v.downvotes }])
-    );
+    return new Map(voteStats.map(v => [v.id, { upvotes: v.upvotes, downvotes: v.downvotes }]));
   }
 
-  /**
-   * Ensure a stop exists in the graph, adding it if necessary
-   */
   private async ensureStopInGraph(stopId: string, graph: RouteGraph): Promise<void> {
-    if (!graph.edges.has(stopId)) {
-      graph.edges.set(stopId, []);
-    }
-
+    if (!graph.edges.has(stopId)) graph.edges.set(stopId, []);
     if (!graph.nodeNames.has(stopId)) {
       const stop = await prisma.stop.findUnique({
         where: { id: stopId },
-        select: { name: true }
+        select: { name: true },
       });
-
-      if (!stop) {
-        throw new Error(`Stop not found: ${stopId}`);
-      }
-
+      if (!stop) throw new Error(`Stop not found: ${stopId}`);
       graph.nodeNames.set(stopId, stop.name);
     }
   }
 
-  /**
-   * Get cached graph or rebuild if expired
-   */
   private async getGraph(): Promise<RouteGraph> {
     const now = Date.now();
     if (!this.graphCache || (now - this.lastBuildTime) > this.cacheTTL) {
       console.log('🔄 Building fresh graph...');
       this.graphCache = await buildGraph();
       this.lastBuildTime = now;
+    } else {
+      console.log(`📦 Using cached graph (age ${Math.round((now - this.lastBuildTime) / 1000)}s)`);
     }
     return this.graphCache;
   }
 
-  /**
-   * Dijkstra's algorithm for shortest path
-   */
+  // ─── Weight function ────────────────────────────────────────────────
+  private async getWeight(
+    edge: GraphEdge,
+    weightKey: WeightKey,
+    voteStatsMap: Map<string, { upvotes: number; downvotes: number }>,
+    walkingPolicy: WalkingPolicy,
+    durationContext: { multiplier: number; timeOfDayLabel: string },   // ← NEW
+    useEffectiveDuration: boolean                                       // ← NEW
+  ): Promise<number> {
+    const isWalking = edge.transportType === TransportType.walking;
+
+    let effectivePrice = edge.price;
+    let effectiveDuration = edge.duration;
+
+    if (isWalking) {
+      // Walking is not traffic-affected
+      const km = (edge.distanceM ?? 0) / 1000;
+      effectivePrice = walkingPolicy.pricePerKm * km;
+      effectiveDuration = edge.duration * walkingPolicy.timePenalty;
+    } else if (useEffectiveDuration) {
+      // ← NEW: motorized edges get traffic multiplier
+      effectiveDuration = edge.duration * durationContext.multiplier;
+    }
+
+    let baseWeight: number;
+    if (weightKey === 'price') {
+      baseWeight = effectivePrice;
+    } else if (weightKey === 'duration') {
+      baseWeight = effectiveDuration;
+    } else {
+      const normalizedPrice = effectivePrice / 10;
+      baseWeight = (normalizedPrice * BALANCED_PRICE_WEIGHT) +
+                   (effectiveDuration * BALANCED_DURATION_WEIGHT);
+    }
+
+    return this.getVoteAdjustedWeight(edge, baseWeight, voteStatsMap);
+  }
+
+  private async getVoteAdjustedWeight(
+    edge: GraphEdge,
+    baseWeight: number,
+    voteStatsMap: Map<string, { upvotes: number; downvotes: number }>
+  ): Promise<number> {
+    if (!edge.connectionId || edge.transportType === TransportType.walking) {
+      return baseWeight;
+    }
+    const stats = voteStatsMap.get(edge.connectionId);
+    if (!stats) return baseWeight;
+    const totalVotes = stats.upvotes + stats.downvotes;
+    if (totalVotes === 0) return baseWeight;
+    const confidence = (stats.upvotes - stats.downvotes) / totalVotes;
+    const modifier = 1 - (confidence * 0.5);
+    return baseWeight * modifier;
+  }
+
+  // ─── Dijkstra ───────────────────────────────────────────────────────
   private async dijkstra(
     graph: Map<string, GraphEdge[]>,
     start: string,
     end: string,
     weightKey: WeightKey,
-    voteStatsMap: Map<string, { upvotes: number; downvotes: number }>
+    voteStatsMap: Map<string, { upvotes: number; downvotes: number }>,
+    walkingPolicy: WalkingPolicy,
+    durationContext: { multiplier: number; timeOfDayLabel: string },   // ← NEW
+    useEffectiveDuration: boolean                                       // ← NEW
   ): Promise<{ steps: GraphEdge[] } | null> {
     const distances = new Map<string, number>();
     const pathMap = new Map<string, PathEntry>();
@@ -221,16 +276,8 @@ class RoutingService {
       pathMap.set(node, { prevNode: null, edge: null });
       unvisited.add(node);
     }
-
-    if (!distances.has(start)) {
-      distances.set(start, Infinity);
-      unvisited.add(start);
-    }
-    if (!distances.has(end)) {
-      distances.set(end, Infinity);
-      unvisited.add(end);
-    }
-
+    if (!distances.has(start)) { distances.set(start, Infinity); unvisited.add(start); }
+    if (!distances.has(end)) { distances.set(end, Infinity); unvisited.add(end); }
     distances.set(start, 0);
 
     let iterations = 0;
@@ -238,29 +285,24 @@ class RoutingService {
 
     while (unvisited.size > 0 && iterations < maxIterations) {
       iterations++;
-
       let current: string | null = null;
       let smallest = Infinity;
       for (const node of unvisited) {
         const d = distances.get(node) ?? Infinity;
-        if (d < smallest) {
-          smallest = d;
-          current = node;
-        }
+        if (d < smallest) { smallest = d; current = node; }
       }
-
       if (!current || current === end) break;
       if (smallest === Infinity) break;
 
       unvisited.delete(current);
-
       const edges = graph.get(current) ?? [];
       for (const edge of edges) {
         if (!unvisited.has(edge.to)) continue;
-
-        const weight = await this.getWeight(edge, weightKey, voteStatsMap);
+        const weight = await this.getWeight(
+          edge, weightKey, voteStatsMap, walkingPolicy,
+          durationContext, useEffectiveDuration                 // ← NEW
+        );
         const alt = (distances.get(current) ?? Infinity) + weight;
-
         if (alt < (distances.get(edge.to) ?? Infinity)) {
           distances.set(edge.to, alt);
           pathMap.set(edge.to, { prevNode: current, edge });
@@ -268,9 +310,7 @@ class RoutingService {
       }
     }
 
-    if ((distances.get(end) ?? Infinity) === Infinity) {
-      return null;
-    }
+    if ((distances.get(end) ?? Infinity) === Infinity) return null;
 
     const steps: GraphEdge[] = [];
     let cursor: string | null = end;
@@ -280,38 +320,35 @@ class RoutingService {
       steps.unshift(entry.edge);
       cursor = entry.prevNode;
     }
-
-    if (steps.length === 0) {
-      return null;
-    }
-
+    if (steps.length === 0) return null;
     return { steps };
   }
 
-  /**
-   * Yen's algorithm for k-shortest loopless paths
-   */
+  // ─── Yen's algorithm ───────────────────────────────────────────────
   private async yenAlgorithm(
     graph: Map<string, GraphEdge[]>,
     start: string,
     end: string,
     weightKey: WeightKey,
     K: number,
-    voteStatsMap: Map<string, { upvotes: number; downvotes: number }>
+    voteStatsMap: Map<string, { upvotes: number; downvotes: number }>,
+    walkingPolicy: WalkingPolicy,
+    durationContext: { multiplier: number; timeOfDayLabel: string },   // ← NEW
+    useEffectiveDuration: boolean                                       // ← NEW
   ): Promise<GraphEdge[][]> {
     const workingGraph = this.cloneGraph(graph);
     const A: GraphEdge[][] = [];
     const B: { path: GraphEdge[]; cost: number; key: string }[] = [];
 
-    const firstPath = await this.dijkstra(workingGraph, start, end, weightKey, voteStatsMap);
-    if (!firstPath) {
-      return A;
-    }
+    const firstPath = await this.dijkstra(
+      workingGraph, start, end, weightKey, voteStatsMap, walkingPolicy,
+      durationContext, useEffectiveDuration                            // ← NEW
+    );
+    if (!firstPath) return A;
     A.push(firstPath.steps);
 
     for (let k = 1; k < K; k++) {
       const prevPath = A[k - 1];
-      
       for (let i = 0; i < prevPath.length; i++) {
         const spurNode = i === 0 ? start : prevPath[i - 1].to;
         const rootPath = prevPath.slice(0, i);
@@ -331,10 +368,7 @@ class RoutingService {
                 e.toName === nextEdge.toName
               );
               if (edgeIndex !== -1) {
-                removedEdges.push({
-                  from: fromNode,
-                  to: nextEdge.to,
-                });
+                removedEdges.push({ from: fromNode, to: nextEdge.to });
                 edges.splice(edgeIndex, 1);
               }
             }
@@ -343,10 +377,7 @@ class RoutingService {
 
         const spurNodeId = i === 0 ? start : prevPath[i - 1].to;
         const rootPathNodes = new Set<string>();
-        for (const edge of rootPath) {
-          rootPathNodes.add(edge.to);
-        }
-
+        for (const edge of rootPath) rootPathNodes.add(edge.to);
         for (const node of rootPathNodes) {
           if (node !== spurNodeId && node !== start) {
             removedNodes.add(node);
@@ -355,16 +386,11 @@ class RoutingService {
         }
 
         const spurPath = await this.dijkstra(
-          workingGraph,
-          spurNode,
-          end,
-          weightKey,
-          voteStatsMap
+          workingGraph, spurNode, end, weightKey, voteStatsMap, walkingPolicy,
+          durationContext, useEffectiveDuration                          // ← NEW
         );
 
-        for (const node of removedNodes) {
-          workingGraph.set(node, []);
-        }
+        for (const node of removedNodes) workingGraph.set(node, []);
 
         for (const { from, to } of removedEdges) {
           const originalEdges = graph.get(from) || [];
@@ -372,9 +398,7 @@ class RoutingService {
           if (edgeToRestore) {
             const edges = workingGraph.get(from) || [];
             const exists = edges.some(e => e.to === to);
-            if (!exists) {
-              edges.push(edgeToRestore);
-            }
+            if (!exists) edges.push(edgeToRestore);
           }
         }
 
@@ -382,41 +406,31 @@ class RoutingService {
           const totalPath = [...rootPath, ...spurPath.steps];
           const pathKey = this.getPathKey(totalPath);
           const isDuplicate = A.some(p => this.getPathKey(p) === pathKey) ||
-                            B.some(p => p.key === pathKey);
-
+                              B.some(p => p.key === pathKey);
           if (!isDuplicate) {
-            const totalCost = await this.calculatePathCost(totalPath, weightKey, voteStatsMap);
-            B.push({
-              path: totalPath,
-              cost: totalCost,
-              key: pathKey,
-            });
+            const totalCost = await this.calculatePathCost(
+              totalPath, weightKey, voteStatsMap, walkingPolicy,
+              durationContext, useEffectiveDuration                     // ← NEW
+            );
+            B.push({ path: totalPath, cost: totalCost, key: pathKey });
           }
         }
       }
 
-      if (B.length === 0) {
-        break;
-      }
-
+      if (B.length === 0) break;
       B.sort((a, b) => a.cost - b.cost);
       let foundPath = false;
       while (B.length > 0 && !foundPath) {
         const candidate = B.shift();
         if (candidate) {
-          const isDuplicate = A.some(path =>
-            this.getPathKey(path) === candidate.key
-          );
+          const isDuplicate = A.some(path => this.getPathKey(path) === candidate.key);
           if (!isDuplicate) {
             A.push(candidate.path);
             foundPath = true;
           }
         }
       }
-
-      if (!foundPath) {
-        break;
-      }
+      if (!foundPath) break;
     }
 
     return A;
@@ -424,9 +438,7 @@ class RoutingService {
 
   private cloneGraph(graph: Map<string, GraphEdge[]>): Map<string, GraphEdge[]> {
     const clone = new Map<string, GraphEdge[]>();
-    for (const [node, edges] of graph) {
-      clone.set(node, [...edges]);
-    }
+    for (const [node, edges] of graph) clone.set(node, [...edges]);
     return clone;
   }
 
@@ -446,72 +458,54 @@ class RoutingService {
   private async calculatePathCost(
     path: GraphEdge[],
     weightKey: WeightKey,
-    voteStatsMap: Map<string, { upvotes: number; downvotes: number }>
+    voteStatsMap: Map<string, { upvotes: number; downvotes: number }>,
+    walkingPolicy: WalkingPolicy,
+    durationContext: { multiplier: number; timeOfDayLabel: string },   // ← NEW
+    useEffectiveDuration: boolean                                       // ← NEW
   ): Promise<number> {
     let totalCost = 0;
     for (const edge of path) {
-      totalCost += await this.getWeight(edge, weightKey, voteStatsMap);
+      totalCost += await this.getWeight(
+        edge, weightKey, voteStatsMap, walkingPolicy,
+        durationContext, useEffectiveDuration                           // ← NEW
+      );
     }
     return totalCost;
   }
 
-  private async getVoteAdjustedWeight(
-    edge: GraphEdge,
-    baseWeight: number,
-    voteStatsMap: Map<string, { upvotes: number; downvotes: number }>
-  ): Promise<number> {
-    if (!edge.connectionId || edge.transportType === TransportType.walking) {
-      return baseWeight;
-    }
-
-    const stats = voteStatsMap.get(edge.connectionId);
-    if (!stats) {
-      return baseWeight;
-    }
-
-    const totalVotes = stats.upvotes + stats.downvotes;
-    if (totalVotes === 0) {
-      return baseWeight;
-    }
-
-    const confidence = (stats.upvotes - stats.downvotes) / totalVotes;
-    const modifier = 1 - (confidence * 0.5);
-    return baseWeight * modifier;
-  }
-
-  private async getWeight(
-    edge: GraphEdge,
-    weightKey: WeightKey,
-    voteStatsMap: Map<string, { upvotes: number; downvotes: number }>
-  ): Promise<number> {
-    let baseWeight: number;
-    if (weightKey === 'price') {
-      baseWeight = edge.price;
-    } else if (weightKey === 'duration') {
-      baseWeight = edge.duration;
-    } else {
-      const normalizedPrice = edge.price / 10;
-      baseWeight = (normalizedPrice * BALANCED_PRICE_WEIGHT) +
-                   (edge.duration * BALANCED_DURATION_WEIGHT);
-    }
-
-    return this.getVoteAdjustedWeight(edge, baseWeight, voteStatsMap);
-  }
-
-  private formatRoute(steps: GraphEdge[], id?: string): CalculatedRoute {
+  // ─── Formatting (Thread B: base vs effective durations) ────────────
+  private formatRoute(
+    steps: GraphEdge[],
+    durationContext: { multiplier: number; timeOfDayLabel: string },   // ← NEW
+    at: Date,                                                           // ← NEW
+    id?: string
+  ): CalculatedRoute {
     const totalPrice = steps.reduce((sum, s) => sum + s.price, 0);
-    const totalDuration = steps.reduce((sum, s) => sum + s.duration, 0);
 
-    return {
-      id: id || `route_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      totalPrice,
-      totalDuration,
-      steps: steps.map((s, index) => ({
+    // Compute both base and effective durations
+    let totalBaseDuration = 0;
+    let totalEffectiveDuration = 0;
+
+    const formattedSteps: RouteStep[] = steps.map((s, index) => {
+      const isWalking = s.transportType === TransportType.walking;
+
+      // ← CHANGED: walking isn't traffic-affected, motorized is
+      const baseDuration = s.duration;
+      const effectiveDuration = isWalking
+        ? s.duration
+        : Math.max(1, Math.round(s.duration * durationContext.multiplier));
+
+      totalBaseDuration += baseDuration;
+      totalEffectiveDuration += effectiveDuration;
+
+      return {
         type: s.transportType,
         from: s.fromName,
         to: s.toName,
         price: s.price,
-        duration: s.duration,
+        duration: effectiveDuration,          // backwards compat
+        baseDuration,                          // ← NEW
+        effectiveDuration,                     // ← NEW
         instructions: s.instructions,
         connectionId: s.connectionId,
         stepIndex: index,
@@ -519,17 +513,33 @@ class RoutingService {
         fromLongitude: s.fromLongitude,
         toLatitude: s.toLatitude,
         toLongitude: s.toLongitude,
-      }))
+      };
+    });
+
+    return {
+      id: id || `route_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      totalPrice,
+      totalDuration: totalEffectiveDuration,     // backwards compat
+      totalBaseDuration,                          // ← NEW
+      totalEffectiveDuration,                     // ← NEW
+      durationContext: {                          // ← NEW
+        at,
+        timeOfDayLabel: durationContext.timeOfDayLabel,
+        durationMultiplier: durationContext.multiplier,
+      },
+      steps: formattedSteps,
     };
   }
 
   private async formatRoutes(
     routes: GraphEdge[][],
-    optimizeBy: 'price' | 'time' | 'balanced'
+    optimizeBy: 'price' | 'time' | 'balanced',
+    durationContext: { multiplier: number; timeOfDayLabel: string }    // ← NEW
   ): Promise<CalculatedRoute[]> {
-    return routes.map((route, index) => {
-      return this.formatRoute(route, `route_${index + 1}_${Date.now()}`);
-    });
+    const at = new Date();   // ← NEW: capture timestamp once for all routes
+    return routes.map((route, index) =>
+      this.formatRoute(route, durationContext, at, `route_${index + 1}_${Date.now()}`)
+    );
   }
 
   private addRouteComparison(
@@ -546,25 +556,21 @@ class RoutingService {
     }
 
     const minPrice = Math.min(...routes.map(r => r.totalPrice));
-    const minDuration = Math.min(...routes.map(r => r.totalDuration));
-    
+    const minDuration = Math.min(...routes.map(r => r.totalEffectiveDuration));  // ← CHANGED
     let bestBalanced = routes[0];
     if (optimizeBy === 'balanced') {
       let bestScore = Infinity;
       for (const route of routes) {
         const normalizedPrice = route.totalPrice / 10;
         const score = (normalizedPrice * BALANCED_PRICE_WEIGHT) +
-                     (route.totalDuration * BALANCED_DURATION_WEIGHT);
-        if (score < bestScore) {
-          bestScore = score;
-          bestBalanced = route;
-        }
+                      (route.totalEffectiveDuration * BALANCED_DURATION_WEIGHT);  // ← CHANGED
+        if (score < bestScore) { bestScore = score; bestBalanced = route; }
       }
     }
 
     return routes.map(route => ({
       ...route,
-      isFastest: route.totalDuration === minDuration,
+      isFastest: route.totalEffectiveDuration === minDuration,  // ← CHANGED
       isCheapest: route.totalPrice === minPrice,
       isBestBalanced: optimizeBy === 'balanced' && route === bestBalanced,
     }));
@@ -577,50 +583,29 @@ class RoutingService {
     averageScore: number;
   }> {
     const nonWalkingSteps = route.steps.filter(step => step.type !== 'walking');
-    const connectionIds = nonWalkingSteps
-      .map(s => s.connectionId)
-      .filter((id): id is string => !!id);
-
+    const connectionIds = nonWalkingSteps.map(s => s.connectionId).filter((id): id is string => !!id);
     const totalSteps = route.steps.length;
 
     if (connectionIds.length === 0) {
-      return {
-        score: 0,
-        totalVotes: 0,
-        stepCount: totalSteps,
-        averageScore: 0,
-      };
+      return { score: 0, totalVotes: 0, stepCount: totalSteps, averageScore: 0 };
     }
 
     const connections = await prisma.connection.findMany({
-      where: {
-        id: { in: connectionIds },
-      },
-      select: {
-        upvotes: true,
-        downvotes: true,
-        voteScore: true,
-      },
+      where: { id: { in: connectionIds } },
+      select: { upvotes: true, downvotes: true, voteScore: true },
     });
 
     if (connections.length === 0) {
-      return {
-        score: 0,
-        totalVotes: 0,
-        stepCount: totalSteps,
-        averageScore: 0,
-      };
+      return { score: 0, totalVotes: 0, stepCount: totalSteps, averageScore: 0 };
     }
 
-    const totalUpvotes = connections.reduce((sum, c) => sum + c.upvotes, 0);
-    const totalDownvotes = connections.reduce((sum, c) => sum + c.downvotes, 0);
-    const totalVoteScore = connections.reduce((sum, c) => sum + c.voteScore, 0);
+    const totalUpvotes = connections.reduce((s, c) => s + c.upvotes, 0);
+    const totalDownvotes = connections.reduce((s, c) => s + c.downvotes, 0);
+    const totalVoteScore = connections.reduce((s, c) => s + c.voteScore, 0);
     const totalVotes = totalUpvotes + totalDownvotes;
-    const averageScore = connections.length > 0 ? totalVoteScore / connections.length : 0;
+    const averageScore = totalVoteScore / connections.length;
 
-    const maxScore = 100;
-    const minScore = -100;
-    const normalizedScore = ((averageScore - minScore) / (maxScore - minScore)) * 100;
+    const normalizedScore = ((averageScore - (-100)) / (100 - (-100))) * 100;
 
     return {
       score: Math.round(Math.min(Math.max(normalizedScore, 0), 100)),
@@ -648,18 +633,13 @@ class RoutingService {
     let totalEdges = 0;
     let walkingEdges = 0;
     let transportEdges = 0;
-
     for (const edges of graph.edges.values()) {
       for (const edge of edges) {
         totalEdges++;
-        if (edge.transportType === TransportType.walking) {
-          walkingEdges++;
-        } else {
-          transportEdges++;
-        }
+        if (edge.transportType === TransportType.walking) walkingEdges++;
+        else transportEdges++;
       }
     }
-
     return {
       nodes: graph.edges.size,
       edges: totalEdges,

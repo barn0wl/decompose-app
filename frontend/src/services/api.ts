@@ -1,7 +1,33 @@
 import { API_BASE_URL } from '../constants';
 import { Stop, CalculateRouteResponse, SuggestedConnection, Connection, RouteStep } from '../types';
 
-// ─── Generic fetch wrapper ─────────────────────────────────────────────────────
+// ─── Errors ────────────────────────────────────────────────────────────────
+
+/**
+ * Structured API error. Thrown by apiFetch when the backend returns a
+ * non-2xx response. Preserves the `code` and `hint` fields the router
+ * provides for actionable user guidance (e.g., NO_VALID_ROUTE).
+ */
+export class ApiError extends Error {
+  code?: string;
+  hint?: string;
+  status: number;
+
+  constructor(
+    message: string,
+    status: number,
+    code?: string,
+    hint?: string
+  ) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.hint = hint;
+  }
+}
+
+// ─── Generic fetch wrapper ─────────────────────────────────────────────────
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -10,8 +36,16 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error ?? `Request failed with status ${response.status}`);
+    const body = await response.json().catch(() => ({} as any));
+
+    // Backend sends one of these shapes:
+    //   { error: 'CODE', message: '...', hint: '...' }   (structured, e.g. NO_VALID_ROUTE)
+    //   { error: 'some message' }                         (plain, generic errors)
+    const code = typeof body?.error === 'string' ? body.error : undefined;
+    const message = body?.message ?? body?.error ?? `Request failed with status ${response.status}`;
+    const hint = typeof body?.hint === 'string' ? body.hint : undefined;
+
+    throw new ApiError(message, response.status, code, hint);
   }
 
   return response.json();
@@ -48,11 +82,11 @@ export async function calculateRoute(
 ): Promise<CalculateRouteResponse> {
   return apiFetch<CalculateRouteResponse>('/routes/calculate', {
     method: 'POST',
-    body: JSON.stringify({ 
-      originStopId, 
-      destinationStopId, 
+    body: JSON.stringify({
+      originStopId,
+      destinationStopId,
       optimizeBy,
-      limit: Math.min(Math.max(1, limit), 5) // Ensure between 1-5
+      limit: Math.min(Math.max(1, limit), 5),
     }),
   });
 }

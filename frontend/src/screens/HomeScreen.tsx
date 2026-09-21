@@ -18,7 +18,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import StopSearchInput from '../components/StopSearchInput';
 import PendingBanner from '../components/PendingBanner';
-import { calculateRoute, getPendingCount } from '../services/api';
+import { calculateRoute, getPendingCount, ApiError } from '../services/api';
 import { RootStackParamList, Stop } from '../types';
 import { useDeviceId } from '../hooks/useDeviceId';
 import { COLORS, FONTS } from '../constants/theme';
@@ -34,6 +34,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [routeLimit, setRouteLimit] = useState<number>(3);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorHint, setErrorHint] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
 
   const canSearch = origin !== null && destination !== null && !isLoading;
@@ -57,6 +58,7 @@ export default function HomeScreen({ navigation }: Props) {
     }
 
     setError(null);
+    setErrorHint(null);
     setIsLoading(true);
 
     try {
@@ -76,7 +78,15 @@ export default function HomeScreen({ navigation }: Props) {
         routeLimit,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue.');
+      if (err instanceof ApiError && err.code === 'NO_VALID_ROUTE') {
+        // Structured no-route case — show message + hint
+        setError(err.message);
+        setErrorHint(err.hint ?? null);
+      } else {
+        // Generic error (network, 500, etc.)
+        setError(err instanceof Error ? err.message : 'Une erreur est survenue.');
+        setErrorHint(null);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -226,7 +236,12 @@ export default function HomeScreen({ navigation }: Props) {
           </View>
 
           {error && (
-            <Text style={styles.error}>{error}</Text>
+            <View style={styles.errorContainer}>
+              <Text style={styles.error}>{error}</Text>
+              {errorHint && (
+                <Text style={styles.errorHint}>{errorHint}</Text>
+              )}
+            </View>
           )}
 
           <Button
@@ -442,11 +457,27 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 16,
   },
+  errorContainer: {
+    backgroundColor: '#FFF3F3',
+    borderLeftWidth: 4,
+    borderLeftColor: '#B00020',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
   error: {
     color: '#B00020',
-    marginBottom: 12,
     fontSize: 13,
-    textAlign: 'center',
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  errorHint: {
+    color: '#B00020',
+    fontSize: 12,
+    marginTop: 6,
+    fontStyle: 'italic',
+    opacity: 0.85,
+    lineHeight: 16,
   },
   button: {
     marginTop: 8,
