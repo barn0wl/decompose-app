@@ -1,3 +1,4 @@
+// src/components/RouteMap.tsx
 import React, { useRef, useEffect, useState } from 'react';
 import {
   StyleSheet,
@@ -15,143 +16,106 @@ import MapView, {
 } from 'react-native-maps';
 import { Text } from 'react-native-paper';
 
-import { RouteStep } from '../types';
+import { Leg } from '../types';
 import { TRANSPORT_COLORS } from '../constants/transport';
 import { COLORS, FONTS } from '../constants/theme';
 
 import MapIcon from '../../assets/icons/map.svg';
 
 interface Props {
-  steps: RouteStep[];
-  currentStepIndex?: number;
-  onStepSelect?: (index: number) => void;
+  legs: Leg[];
+  currentLegIndex?: number;
+  onLegSelect?: (index: number) => void;
   height?: DimensionValue;
 }
 
 const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
+interface LegPath {
+  leg: Leg;
+  coordinates: { latitude: number; longitude: number }[];
+  color: string;
+  isWalking: boolean;
+}
+
 export default function RouteMap({
-  steps,
-  currentStepIndex = 0,
-  onStepSelect,
+  legs,
+  currentLegIndex = 0,
+  onLegSelect,
   height = 300,
 }: Props) {
   const mapRef = useRef<MapView>(null);
-  const [selectedStep, setSelectedStep] = useState<number>(currentStepIndex);
+  const [selectedLeg, setSelectedLeg] = useState<number>(currentLegIndex);
 
   useEffect(() => {
-    setSelectedStep(currentStepIndex);
-  }, [currentStepIndex]);
+    setSelectedLeg(currentLegIndex);
+  }, [currentLegIndex]);
 
-  // Generate coordinates
-  const coordinates = steps
-    .map((step) => {
-      if (step.fromLatitude !== undefined && step.fromLongitude !== undefined) {
-        return {
-          latitude: step.fromLatitude,
-          longitude: step.fromLongitude,
-          title: step.from,
-          stepIndex: step.stepIndex ?? 0,
-        };
+  // Build one path per leg
+  const paths: LegPath[] = [];
+  for (let i = 0; i < legs.length; i++) {
+    const leg = legs[i];
+    const coords: { latitude: number; longitude: number }[] = [];
+
+    coords.push({
+      latitude: leg.fromStop.latitude,
+      longitude: leg.fromStop.longitude,
+    });
+
+    if (leg.type === 'boarding') {
+      for (const stop of leg.intermediateStops) {
+        coords.push({ latitude: stop.latitude, longitude: stop.longitude });
       }
-      return null;
-    })
-    .filter(
-      (coord): coord is {
-        latitude: number;
-        longitude: number;
-        title: string;
-        stepIndex: number;
-      } => coord !== null
-    );
+    }
 
-  const lastStep = steps[steps.length - 1];
-  if (
-    lastStep &&
-    lastStep.toLatitude !== undefined &&
-    lastStep.toLongitude !== undefined
-  ) {
-    coordinates.push({
-      latitude: lastStep.toLatitude,
-      longitude: lastStep.toLongitude,
-      title: lastStep.to,
-      stepIndex: lastStep.stepIndex ?? steps.length - 1,
+    coords.push({
+      latitude: leg.toStop.latitude,
+      longitude: leg.toStop.longitude,
+    });
+
+    paths.push({
+      leg,
+      coordinates: coords,
+      color: leg.type === 'walking'
+        ? COLORS.textMuted
+        : TRANSPORT_COLORS[leg.transportType] ?? COLORS.primary,
+      isWalking: leg.type === 'walking',
     });
   }
 
-  // Generate polylines
-  const polylines = steps
-    .map((step, index) => {
-      if (
-        step.fromLatitude === undefined ||
-        step.fromLongitude === undefined ||
-        step.toLatitude === undefined ||
-        step.toLongitude === undefined
-      ) {
-        return null;
-      }
+  // Markers: only at boarding boundaries (start/end of each leg)
+  const markers: { latitude: number; longitude: number; title: string; legIndex: number; isOrigin: boolean; isDestination: boolean }[] = [];
+  if (legs.length > 0) {
+    markers.push({
+      latitude: legs[0].fromStop.latitude,
+      longitude: legs[0].fromStop.longitude,
+      title: legs[0].fromStop.name,
+      legIndex: 0,
+      isOrigin: true,
+      isDestination: false,
+    });
 
-      return {
-        coordinates: [
-          { latitude: step.fromLatitude, longitude: step.fromLongitude },
-          { latitude: step.toLatitude, longitude: step.toLongitude },
-        ],
-        color: TRANSPORT_COLORS[step.type] || COLORS.primary,
-        strokeWidth: 4,
-        index,
-        step,
-        isActive: index === selectedStep,
-      };
-    })
-    .filter((polyline) => polyline !== null);
+    for (let i = 0; i < legs.length; i++) {
+      const leg = legs[i];
+      const isLast = i === legs.length - 1;
+      // Only mark the destination end of the leg to avoid duplicate markers
+      markers.push({
+        latitude: leg.toStop.latitude,
+        longitude: leg.toStop.longitude,
+        title: leg.toStop.name,
+        legIndex: i,
+        isOrigin: false,
+        isDestination: isLast,
+      });
+    }
+  }
 
   // Fit map to all coordinates
   useEffect(() => {
-    if (coordinates.length > 0 && mapRef.current) {
-      const latitudes = coordinates.map((c) => c.latitude);
-      const longitudes = coordinates.map((c) => c.longitude);
-      const minLat = Math.min(...latitudes);
-      const maxLat = Math.max(...latitudes);
-      const minLng = Math.min(...longitudes);
-      const maxLng = Math.max(...longitudes);
-      const padding = 0.05;
-      const region: Region = {
-        latitude: (minLat + maxLat) / 2,
-        longitude: (minLng + maxLng) / 2,
-        latitudeDelta: maxLat - minLat + padding,
-        longitudeDelta: maxLng - minLng + padding,
-      };
+    if (markers.length === 0 || !mapRef.current) return;
 
-      if (region.latitudeDelta < 0.01) region.latitudeDelta = 0.01;
-      if (region.longitudeDelta < 0.01) region.longitudeDelta = 0.01;
-
-      mapRef.current.animateToRegion(region, 1000);
-    }
-  }, [coordinates]);
-
-  const didMountRef = useRef(false);
-
-  // Zoom to selected step
-  useEffect(() => {
-    if (!didMountRef.current) {
-      didMountRef.current = true;
-      return;
-    }
-    if (!mapRef.current) return;
-
-    const step = steps[selectedStep];
-    if (
-      !step ||
-      step.fromLatitude === undefined ||
-      step.fromLongitude === undefined ||
-      step.toLatitude === undefined ||
-      step.toLongitude === undefined
-    ) {
-      return;
-    }
-
-    const lats = [step.fromLatitude, step.toLatitude];
-    const lngs = [step.fromLongitude, step.toLongitude];
+    const lats = markers.map(m => m.latitude);
+    const lngs = markers.map(m => m.longitude);
     const minLat = Math.min(...lats);
     const maxLat = Math.max(...lats);
     const minLng = Math.min(...lngs);
@@ -165,17 +129,15 @@ export default function RouteMap({
       longitudeDelta: Math.max(maxLng - minLng + padding, 0.01),
     };
 
-    mapRef.current.animateToRegion(region, 500);
-  }, [selectedStep, steps]);
+    mapRef.current.animateToRegion(region, 800);
+  }, [legs]);
 
-  const handleStepPress = (index: number) => {
-    setSelectedStep(index);
-    if (onStepSelect) {
-      onStepSelect(index);
-    }
+  const handleLegPress = (index: number) => {
+    setSelectedLeg(index);
+    onLegSelect?.(index);
   };
 
-  if (coordinates.length === 0) {
+  if (markers.length === 0) {
     return (
       <View style={[styles.container, { height }]}>
         <View style={styles.placeholder}>
@@ -196,8 +158,6 @@ export default function RouteMap({
         ref={mapRef}
         provider={PROVIDER_DEFAULT}
         style={styles.map}
-        // Disable the underlying Google/Apple basemap on Android so OSM tiles are the only visible layer.
-        // On iOS, `standard` still shows Apple's base layer, but UrlTile is drawn on top and covers it.
         mapType={Platform.OS === 'android' ? 'none' : 'standard'}
         showsUserLocation={false}
         showsMyLocationButton={false}
@@ -208,13 +168,12 @@ export default function RouteMap({
         pitchEnabled={false}
         zoomControlEnabled={true}
         initialRegion={{
-          latitude: coordinates[0].latitude,
-          longitude: coordinates[0].longitude,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
+          latitude: markers[0].latitude,
+          longitude: markers[0].longitude,
+          latitudeDelta: 0.09,
+          longitudeDelta: 0.04,
         }}
       >
-        {/* OpenStreetMap tile layer */}
         <UrlTile
           urlTemplate={OSM_TILE_URL}
           maximumZ={19}
@@ -222,79 +181,54 @@ export default function RouteMap({
           tileSize={256}
         />
 
-        {/* Polylines */}
-        {polylines.map((polyline, index) => {
-          if (!polyline) return null;
-          const isActive = index === selectedStep;
-          const color = polyline.color;
+        {/* Polylines: one per leg */}
+        {paths.map((path, index) => {
+          const isActive = index === selectedLeg;
           return (
             <Polyline
-              key={index}
-              coordinates={polyline.coordinates}
-              strokeColor={isActive ? color : color + '80'}
+              key={`leg-${index}`}
+              coordinates={path.coordinates}
+              strokeColor={isActive ? path.color : path.color + '70'}
               strokeWidth={isActive ? 6 : 4}
-              lineDashPattern={
-                polyline.step.type === 'walking' ? [5, 5] : undefined
-              }
+              lineDashPattern={path.isWalking ? [6, 6] : undefined}
               tappable={true}
-              onPress={() => handleStepPress(index)}
+              onPress={() => handleLegPress(index)}
             />
           );
         })}
 
         {/* Markers */}
-        {coordinates.map((coord, index) => {
-          const isOrigin = index === 0;
-          const isDestination = index === coordinates.length - 1;
-          const stepIndex = index - 1;
-          const stepColor =
-            !isOrigin && !isDestination && stepIndex >= 0
-              ? TRANSPORT_COLORS[steps[stepIndex]?.type] || COLORS.primary
-              : COLORS.primary;
-
-          let markerColor = stepColor;
-          if (isOrigin) markerColor = COLORS.accent;
-          else if (isDestination) markerColor = COLORS.highlight;
-          else if (stepIndex === selectedStep) markerColor = COLORS.primary;
-
-          const isActiveMarker = stepIndex === selectedStep;
+        {markers.map((coord, index) => {
+          const color = coord.isOrigin
+            ? COLORS.accent
+            : coord.isDestination
+            ? COLORS.highlight
+            : COLORS.primary;
+          const isActive = coord.legIndex === selectedLeg;
 
           return (
             <Marker
-              key={index}
-              coordinate={{
-                latitude: coord.latitude,
-                longitude: coord.longitude,
-              }}
+              key={`marker-${index}`}
+              coordinate={{ latitude: coord.latitude, longitude: coord.longitude }}
               title={coord.title}
               description={
-                isOrigin
+                coord.isOrigin
                   ? 'Départ'
-                  : isDestination
+                  : coord.isDestination
                   ? 'Arrivée'
-                  : `Étape ${stepIndex + 1}`
+                  : `Étape ${coord.legIndex + 1}`
               }
             >
-              <TouchableOpacity
-                onPress={() => {
-                  if (isOrigin) {
-                    handleStepPress(0);
-                  } else if (isDestination) {
-                    handleStepPress(steps.length - 1);
-                  } else if (stepIndex >= 0) {
-                    handleStepPress(stepIndex);
-                  }
-                }}
-              >
+              <TouchableOpacity onPress={() => handleLegPress(coord.legIndex)}>
                 <View
                   style={[
                     styles.markerContainer,
-                    { backgroundColor: markerColor },
-                    isActiveMarker && styles.markerContainerActive,
+                    { backgroundColor: color },
+                    isActive && styles.markerContainerActive,
                   ]}
                 >
                   <Text style={styles.markerText}>
-                    {isOrigin ? 'D' : isDestination ? 'A' : String(stepIndex + 1)}
+                    {coord.isOrigin ? 'D' : coord.isDestination ? 'A' : String(coord.legIndex + 1)}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -303,11 +237,11 @@ export default function RouteMap({
         })}
       </MapView>
 
-      {/* Step indicator */}
-      {steps.length > 0 && (
-        <View style={styles.stepIndicator}>
-          <Text style={styles.stepIndicatorText}>
-            {selectedStep + 1} / {steps.length}
+      {/* Leg indicator */}
+      {legs.length > 0 && (
+        <View style={styles.legIndicator}>
+          <Text style={styles.legIndicatorText}>
+            {selectedLeg + 1} / {legs.length}
           </Text>
         </View>
       )}
@@ -327,9 +261,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 8,
   },
-  map: {
-    flex: 1,
-  },
+  map: { flex: 1 },
   placeholder: {
     flex: 1,
     justifyContent: 'center',
@@ -352,8 +284,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-
-  // Marker
   markerContainer: {
     width: 34,
     height: 34,
@@ -382,9 +312,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 12,
   },
-
-  // Step indicator pill
-  stepIndicator: {
+  legIndicator: {
     position: 'absolute',
     bottom: 12,
     right: 12,
@@ -393,12 +321,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
   },
-  stepIndicatorText: {
+  legIndicatorText: {
     fontFamily: FONTS.heading,
     color: COLORS.textLight,
     fontSize: 12,

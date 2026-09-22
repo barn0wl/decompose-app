@@ -1,29 +1,24 @@
-export interface ApiErrorBody {
-  error: string;       // e.g. 'NO_VALID_ROUTE' or a plain message
-  message?: string;
-  hint?: string;
-  context?: Record<string, unknown>;
-}
+// src/types.ts
 
 // ─── Shared Transport Types ────────────────────────────────────────────────
 
 export type TransportType = 'communal_taxi' | 'gbaka' | 'sotra_bus' | 'walking';
 
-// ─── Navigation ───────────────────────────────────────────────────────────────
+// ─── API Errors ────────────────────────────────────────────────────────────
+
+export interface ApiErrorBody {
+  error: string;
+  message?: string;
+  hint?: string;
+  context?: Record<string, unknown>;
+}
+
+// ─── Navigation ───────────────────────────────────────────────────────────
 
 export type RootStackParamList = {
   Home: undefined;
-  Results: {
-    originId: string;
-    originName: string;
-    destinationId: string;
-    destinationName: string;
-    optimizeBy: 'price' | 'time' | 'balanced';
-    routes: CalculatedRoute[];
-    routeLimit?: number;
-  };
   RouteDetail: {
-    selectedRoute: CalculatedRoute;
+    route: CalculatedRoute;
     originName: string;
     destinationName: string;
   };
@@ -31,7 +26,7 @@ export type RootStackParamList = {
   PendingConfirmations: undefined;
 };
 
-// ─── API types (mirror your backend) ──────────────────────────────────────────
+// ─── API Types ────────────────────────────────────────────────────────────
 
 export interface Stop {
   id: string;
@@ -42,48 +37,93 @@ export interface Stop {
   type: 'taxi_stop' | 'gbaka_station' | 'landmark' | 'zone_boundary';
 }
 
-export interface RouteStep {
-  type: TransportType;
-  from: string;        // Stop name
-  to: string;          // Stop name
+export interface StopRef {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+}
+
+// ─── Pricing ──────────────────────────────────────────────────────────────
+
+export type PricingRule =
+  | { type: 'flat'; price: number }
+  | { type: 'banded'; bands: Array<{ uptoSequence: number; price: number }> };
+
+// ─── Legs ─────────────────────────────────────────────────────────────────
+
+export interface BoardingLeg {
+  type: 'boarding';
+  routeId: string;
+  routeName: string;
+  transportType: TransportType;
+
+  fromStop: StopRef;
+  toStop: StopRef;
+  intermediateStops: StopRef[];
+
   price: number;
-  duration: number;
+  pricingRule: PricingRule;
+  distanceStops: number;
+
+  baseDuration: number;
+  effectiveDuration: number;
+  durationMultiplier: number;
+
+  fromLatitude: number;
+  fromLongitude: number;
+  toLatitude: number;
+  toLongitude: number;
+}
+
+export interface WalkingLeg {
+  type: 'walking';
+  fromStop: StopRef;
+  toStop: StopRef;
+
+  distanceM: number;
+  baseDuration: number;
+  effectiveDuration: number;
   instructions: string;
-  connectionId?: string;
-  stepIndex?: number;
-  // Coordinates for map visualization
-  fromLatitude?: number;
-  fromLongitude?: number;
-  toLatitude?: number;
-  toLongitude?: number;
+
+  fromLatitude: number;
+  fromLongitude: number;
+  toLatitude: number;
+  toLongitude: number;
+}
+
+export type Leg = BoardingLeg | WalkingLeg;
+
+// ─── Route ────────────────────────────────────────────────────────────────
+
+export interface DurationContext {
+  at: string;                   // ISO string over the wire
+  timeOfDayLabel: string;
+  durationMultiplier: number;
 }
 
 export interface CalculatedRoute {
   id: string;
+  legs: Leg[];
+
   totalPrice: number;
-  totalDuration: number;
-  steps: RouteStep[];
-  trustScore?: {
-    score: number;      // 0-100
-    totalVotes: number;
-    stepCount: number;
-    averageScore: number;
-  };
-  // Comparison metadata (for multi-route support)
-  rank?: number;
-  isFastest?: boolean;
-  isCheapest?: boolean;
-  isBestBalanced?: boolean;
+  totalBaseDuration: number;
+  totalEffectiveDuration: number;
+  totalWalkingDistanceM: number;
+
+  boardingCount: number;
+  walkingCount: number;
+
+  durationContext: DurationContext;
 }
 
 export interface CalculateRouteResponse {
   origin: Pick<Stop, 'id' | 'name' | 'commune'>;
   destination: Pick<Stop, 'id' | 'name' | 'commune'>;
-  routes: CalculatedRoute[];
-  optimizedFor: 'price' | 'time' | 'balanced';
+  route: CalculatedRoute;
 }
 
-// ─── Suggestion Types ────────────────────────────────────────────────────────
+// ─── Suggestions (kept for backward compatibility — feature is orphaned) ──
 
 export interface SuggestedConnection {
   id: string;
@@ -91,7 +131,7 @@ export interface SuggestedConnection {
   toStopId: string;
   fromStop: Stop;
   toStop: Stop;
-  transportType: 'communal_taxi' | 'gbaka' | 'sotra_bus' | 'walking';
+  transportType: TransportType;
   basePrice: number;
   durationMinutes: number;
   routeDescription?: string;
@@ -109,7 +149,7 @@ export interface Connection {
   toStopId: string;
   fromStop?: Stop;
   toStop?: Stop;
-  transportType: 'communal_taxi' | 'gbaka' | 'sotra_bus' | 'walking';
+  transportType: TransportType;
   basePrice: number;
   durationMinutes: number;
   routeDescription?: string;
@@ -118,141 +158,40 @@ export interface Connection {
   voteScore: number;
 }
 
-// ─── Utility Types ──────────────────────────────────────────────────────────
+// ─── Utility Helpers ──────────────────────────────────────────────────────
 
-/**
- * Helper to get step count for display
- */
-export function getStepCount(route: CalculatedRoute): number {
-  return route.steps.length;
+export function formatPrice(price: number): string {
+  return `${price} CFA`;
 }
 
-/**
- * Helper to get transport type emoji/icon
- */
-export function getTransportIcon(type: RouteStep['type']): string {
-  const icons = {
+export function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h${m.toString().padStart(2, '0')}` : `${h}h`;
+}
+
+export function formatWalkingDistance(meters: number): string {
+  if (meters < 1000) return `${Math.round(meters)}m`;
+  return `${(meters / 1000).toFixed(2)}km`;
+}
+
+export function getTransportDisplayName(type: TransportType): string {
+  const names: Record<TransportType, string> = {
+    'communal_taxi': 'Taxi',
+    'gbaka': 'Gbaka',
+    'sotra_bus': 'SOTRA Bus',
+    'walking': 'Marche',
+  };
+  return names[type] ?? type;
+}
+
+export function getTransportIcon(type: TransportType): string {
+  const icons: Record<TransportType, string> = {
     'communal_taxi': '🚕',
     'gbaka': '🚐',
     'sotra_bus': '🚌',
     'walking': '🚶',
   };
-  return icons[type] || '🚗';
-}
-
-/**
- * Helper to get transport type display name
- */
-export function getTransportDisplayName(type: RouteStep['type']): string {
-  const names = {
-    'communal_taxi': 'Taxi',
-    'gbaka': 'Gbaka',
-    'sotra_bus': 'SOTRA Bus',
-    'walking': 'Walk',
-  };
-  return names[type] || type;
-}
-
-/**
- * Helper to format price
- */
-export function formatPrice(price: number): string {
-  return `${price} CFA`;
-}
-
-/**
- * Helper to format duration
- */
-export function formatDuration(minutes: number): string {
-  if (minutes < 60) {
-    return `${minutes} min`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  if (remainingMinutes === 0) {
-    return `${hours}h`;
-  }
-  return `${hours}h ${remainingMinutes}min`;
-}
-
-/**
- * Helper to get route summary
- */
-export function getRouteSummary(route: CalculatedRoute): string {
-  const parts: string[] = [];
-  const stepTypes = route.steps.map(s => s.type);
-  
-  // Count transport types
-  const typeCounts = stepTypes.reduce((acc, type) => {
-    acc[type] = (acc[type] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-  
-  const typeNames: Record<string, string> = {
-    'communal_taxi': 'taxi',
-    'gbaka': 'gbaka',
-    'sotra_bus': 'bus',
-    'walking': 'walk',
-  };
-  
-  const entries = Object.entries(typeCounts);
-  if (entries.length === 1) {
-    const [type, count] = entries[0];
-    return `${count}x ${typeNames[type]}`;
-  }
-  
-  return entries.map(([type, count]) => `${count}x ${typeNames[type]}`).join(' + ');
-}
-
-/**
- * Helper to determine if a route has walking sections
- */
-export function hasWalking(route: CalculatedRoute): boolean {
-  return route.steps.some(s => s.type === 'walking');
-}
-
-/**
- * Helper to get walking distance approximation (if walking steps exist)
- */
-export function getWalkingDistance(route: CalculatedRoute): number | null {
-  let totalDistance = 0;
-  let hasWalkingSteps = false;
-  
-  for (const step of route.steps) {
-    if (step.type === 'walking' && step.duration) {
-      // Approximate: walking speed ~83m/min
-      totalDistance += step.duration * 83;
-      hasWalkingSteps = true;
-    }
-  }
-  
-  return hasWalkingSteps ? totalDistance : null;
-}
-
-/**
- * Helper to format walking distance
- */
-export function formatWalkingDistance(meters: number): string {
-  if (meters < 1000) {
-    return `${Math.round(meters)}m`;
-  }
-  return `${(meters / 1000).toFixed(1)}km`;
-}
-
-/**
- * Helper to get trust score color
- */
-export function getTrustScoreColor(score: number): string {
-  if (score >= 70) return '#1A4A4A'; // Deep Teal
-  if (score >= 40) return '#D4A843'; // Warm Gold
-  return '#B00020';                   // Error red
-}
-
-/**
- * Helper to get trust score label
- */
-export function getTrustScoreLabel(score: number): string {
-  if (score >= 70) return 'Haute confiance';
-  if (score >= 40) return 'Confiance moyenne';
-  return 'Faible confiance';
+  return icons[type] ?? '🚗';
 }

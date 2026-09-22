@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '../constants';
-import { Stop, CalculateRouteResponse, SuggestedConnection, Connection, RouteStep } from '../types';
+import { Stop, CalculateRouteResponse, SuggestedConnection, Connection } from '../types';
 
 // ─── Errors ────────────────────────────────────────────────────────────────
 
@@ -65,28 +65,25 @@ export async function getAllStops(): Promise<Stop[]> {
   return data.stops;
 }
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
+// ─── Routes ───────────────────────────────────────────────────────────────
 
 export interface CalculateRouteInput {
   originStopId: string;
   destinationStopId: string;
-  optimizeBy?: 'price' | 'time' | 'balanced';
-  limit?: number; // Max number of routes to return (1-5)
+  at?: string;   // ISO timestamp, optional (used for demoing time-of-day)
 }
 
 export async function calculateRoute(
   originStopId: string,
   destinationStopId: string,
-  optimizeBy: 'price' | 'time' | 'balanced' = 'price',
-  limit: number = 1
+  at?: string
 ): Promise<CalculateRouteResponse> {
   return apiFetch<CalculateRouteResponse>('/routes/calculate', {
     method: 'POST',
     body: JSON.stringify({
       originStopId,
       destinationStopId,
-      optimizeBy,
-      limit: Math.min(Math.max(1, limit), 5),
+      ...(at ? { at } : {}),
     }),
   });
 }

@@ -5,14 +5,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  TouchableOpacity,
 } from 'react-native';
-import {
-  Text,
-  Button,
-  Appbar,
-} from 'react-native-paper';
-import Slider from '@react-native-community/slider';
+import { Text, Button } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -24,14 +18,11 @@ import { useDeviceId } from '../hooks/useDeviceId';
 import { COLORS, FONTS } from '../constants/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
-type OptimizeBy = 'price' | 'time' | 'balanced';
 
 export default function HomeScreen({ navigation }: Props) {
   const deviceId = useDeviceId();
   const [origin, setOrigin] = useState<Stop | null>(null);
   const [destination, setDestination] = useState<Stop | null>(null);
-  const [optimizeBy, setOptimizeBy] = useState<OptimizeBy>('price');
-  const [routeLimit, setRouteLimit] = useState<number>(3);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorHint, setErrorHint] = useState<string | null>(null);
@@ -54,6 +45,7 @@ export default function HomeScreen({ navigation }: Props) {
     if (!origin || !destination) return;
     if (origin.id === destination.id) {
       setError('Le départ et la destination ne peuvent pas être identiques.');
+      setErrorHint(null);
       return;
     }
 
@@ -62,54 +54,31 @@ export default function HomeScreen({ navigation }: Props) {
     setIsLoading(true);
 
     try {
-      const response = await calculateRoute(
-        origin.id,
-        destination.id,
-        optimizeBy,
-        routeLimit
-      );
-      navigation.navigate('Results', {
-        originId: origin.id,
+      const response = await calculateRoute(origin.id, destination.id);
+      navigation.navigate('RouteDetail', {
+        route: response.route,
         originName: origin.name,
-        destinationId: destination.id,
         destinationName: destination.name,
-        optimizeBy,
-        routes: response.routes,
-        routeLimit,
       });
     } catch (err) {
       if (err instanceof ApiError && err.code === 'NO_VALID_ROUTE') {
-        // Structured no-route case — show message + hint
         setError(err.message);
         setErrorHint(err.hint ?? null);
       } else {
-        // Generic error (network, 500, etc.)
         setError(err instanceof Error ? err.message : 'Une erreur est survenue.');
         setErrorHint(null);
       }
     } finally {
       setIsLoading(false);
     }
-  }, [origin, destination, optimizeBy, routeLimit, navigation]);
+  }, [origin, destination, navigation]);
 
   const handleSuggestRoute = () => {
     navigation.navigate('SuggestConnection');
   };
 
-  const getRouteLimitLabel = (limit: number): string => {
-    const labels: Record<number, string> = {
-      1: '1 route',
-      2: '2 routes',
-      3: '3 routes',
-      4: '4 routes',
-      5: '5 routes',
-    };
-    return labels[limit] || `${limit} routes`;
-  };
-
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Custom Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.appTitle}>Décomposer</Text>
@@ -135,7 +104,6 @@ export default function HomeScreen({ navigation }: Props) {
         >
           <View style={[styles.card, styles.searchCard]}>
             <View style={styles.cardAccent} />
-
             <View style={styles.cardContent}>
               <Text style={styles.sectionLabel}>D'où tu pars ?</Text>
               <StopSearchInput
@@ -155,92 +123,10 @@ export default function HomeScreen({ navigation }: Props) {
             </View>
           </View>
 
-          <View style={[styles.card, styles.optimizationCard]}>
-            <View style={styles.cardAccent} />
-
-            <View style={styles.cardContent}>
-              <Text style={styles.sectionLabel}>Optimiser par</Text>
-              <View style={styles.optimizeContainer}>
-                {([
-                  { value: 'price', label: 'Prix' },
-                  { value: 'time', label: 'Temps' },
-                  { value: 'balanced', label: 'Équilibré' },
-                ] as const).map((option) => {
-                  const isSelected = optimizeBy === option.value;
-                  return (
-                    <TouchableOpacity
-                      key={option.value}
-                      onPress={() => setOptimizeBy(option.value)}
-                      activeOpacity={0.8}
-                      style={[
-                        styles.optimizeButton,
-                        isSelected && styles.optimizeButtonSelected,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.optimizeButtonText,
-                          isSelected && styles.optimizeButtonTextSelected,
-                        ]}
-                      >
-                        {option.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <View style={styles.limitContainer}>
-                <View style={styles.limitHeader}>
-                  <Text style={styles.limitLabel}>
-                    Nombre de trajets à afficher
-                  </Text>
-                  <View style={styles.limitValueBadge}>
-                    <Text style={styles.limitValueText}>
-                      {routeLimit}
-                    </Text>
-                  </View>
-                </View>
-
-                <Slider
-                  style={styles.slider}
-                  minimumValue={1}
-                  maximumValue={5}
-                  step={1}
-                  value={routeLimit}
-                  onValueChange={(value) => setRouteLimit(Math.round(value))}
-                  minimumTrackTintColor={COLORS.primary}
-                  maximumTrackTintColor={COLORS.border}
-                  thumbTintColor={COLORS.accent}
-                />
-
-                <View style={styles.sliderLabels}>
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <Text
-                      key={n}
-                      style={[
-                        styles.sliderLabel,
-                        routeLimit === n && styles.sliderLabelActive,
-                      ]}
-                    >
-                      {n}
-                    </Text>
-                  ))}
-                </View>
-
-                <Text style={styles.limitHint}>
-                  {getRouteLimitLabel(routeLimit)} — Plus de trajets = plus d'options, temps de calcul plus long
-                </Text>
-              </View>
-            </View>
-          </View>
-
           {error && (
             <View style={styles.errorContainer}>
               <Text style={styles.error}>{error}</Text>
-              {errorHint && (
-                <Text style={styles.errorHint}>{errorHint}</Text>
-              )}
+              {errorHint && <Text style={styles.errorHint}>{errorHint}</Text>}
             </View>
           )}
 
@@ -274,13 +160,8 @@ export default function HomeScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  flex: {
-    flex: 1,
-  },
+  safeArea: { flex: 1, backgroundColor: COLORS.background },
+  flex: { flex: 1 },
   header: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 24,
@@ -289,9 +170,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
-  headerContent: {
-    zIndex: 2,
-  },
+  headerContent: { zIndex: 2 },
   appTitle: {
     fontFamily: FONTS.heading,
     fontSize: 34,
@@ -317,10 +196,7 @@ const styles = StyleSheet.create({
     opacity: 0.15,
     zIndex: 1,
   },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
+  scrollContent: { padding: 16, paddingBottom: 40 },
   card: {
     backgroundColor: COLORS.surface,
     borderRadius: 16,
@@ -332,28 +208,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 8,
   },
-  searchCard: {
-    zIndex: 10,
-    elevation: 10,
-  },
-  optimizationCard: {
-    zIndex: 1,
-  },
+  searchCard: { zIndex: 10, elevation: 10 },
   cardAccent: {
     position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
+    left: 0, top: 0, bottom: 0, width: 4,
     backgroundColor: COLORS.accent,
     borderTopLeftRadius: 16,
     borderBottomLeftRadius: 16,
     zIndex: 2,
   },
-  cardContent: {
-    padding: 16,
-    overflow: 'visible',
-  },
+  cardContent: { padding: 16, overflow: 'visible' },
   sectionLabel: {
     fontFamily: FONTS.heading,
     fontSize: 15,
@@ -362,100 +226,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 4,
     letterSpacing: 0.3,
-  },
-  optimizeContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
-  },
-  optimizeButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: COLORS.accent,
-    borderWidth: 1.5,
-    borderColor: COLORS.accent,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-  },
-  optimizeButtonSelected: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  optimizeButtonText: {
-    fontFamily: FONTS.heading,
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
-    letterSpacing: 0.3,
-  },
-  optimizeButtonTextSelected: {
-    color: COLORS.textLight,
-  },
-  limitContainer: {
-    marginTop: 16,
-    marginBottom: 4,
-  },
-  limitHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  limitLabel: {
-    fontFamily: FONTS.heading,
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
-    letterSpacing: 0.3,
-  },
-  limitValueBadge: {
-    backgroundColor: COLORS.primary,
-    minWidth: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-  },
-  limitValueText: {
-    fontFamily: FONTS.heading,
-    color: COLORS.textLight,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  slider: {
-    width: '100%',
-    height: 40,
-    marginHorizontal: -4, // slight correction for the thumb padding
-  },
-  sliderLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
-    marginTop: -8,
-    marginBottom: 8,
-  },
-  sliderLabel: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    fontFamily: FONTS.heading,
-    fontWeight: '500',
-  },
-  sliderLabelActive: {
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  limitHint: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    fontStyle: 'italic',
-    marginTop: 4,
-    lineHeight: 16,
   },
   errorContainer: {
     backgroundColor: '#FFF3F3',
@@ -479,21 +249,13 @@ const styles = StyleSheet.create({
     opacity: 0.85,
     lineHeight: 16,
   },
-  button: {
-    marginTop: 8,
-    borderRadius: 12,
-    elevation: 3,
-  },
-  buttonContent: {
-    paddingVertical: 8,
-  },
+  button: { marginTop: 8, borderRadius: 12, elevation: 3 },
+  buttonContent: { paddingVertical: 8 },
   suggestButton: {
     marginTop: 12,
     borderRadius: 12,
     borderColor: COLORS.primary,
     borderWidth: 1.5,
   },
-  suggestButtonContent: {
-    paddingVertical: 6,
-  },
+  suggestButtonContent: { paddingVertical: 6 },
 });
