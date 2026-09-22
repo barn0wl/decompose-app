@@ -2,7 +2,7 @@ import { TransportType } from '../../generated/prisma';
 import { buildGraph, GraphEdge, RouteGraph } from './graph.builder';
 import { WalkingPolicy, DEFAULT_WALKING_POLICY } from './walking-policy';
 import { filterWalkingHeavy } from './walking-filter';
-import { getCompositeDurationMultiplier } from '../duration-patterns'
+import {getCompositeDurationMultiplier } from '../duration-patterns';
 import prisma from '../lib/prisma';
 
 // ─── INTERFACES ───────────────────────────────────────────────────────────
@@ -12,9 +12,9 @@ export interface RouteStep {
   from: string;
   to: string;
   price: number;
-  duration: number;              // effective duration (backwards compat)
-  baseDuration: number;          // ← NEW
-  effectiveDuration: number;     // ← NEW (same as duration)
+  duration: number;
+  baseDuration: number;
+  effectiveDuration: number;
   instructions: string;
   connectionId?: string;
   stepIndex?: number;
@@ -24,7 +24,7 @@ export interface RouteStep {
   toLongitude?: number;
 }
 
-export interface DurationContext {   // ← NEW
+export interface DurationContext {
   at: Date;
   timeOfDayLabel: string;
   durationMultiplier: number;
@@ -33,10 +33,10 @@ export interface DurationContext {   // ← NEW
 export interface CalculatedRoute {
   id: string;
   totalPrice: number;
-  totalDuration: number;            // effective duration (backwards compat)
-  totalBaseDuration: number;        // ← NEW
-  totalEffectiveDuration: number;   // ← NEW
-  durationContext: DurationContext; // ← NEW
+  totalDuration: number;
+  totalBaseDuration: number;
+  totalEffectiveDuration: number;
+  durationContext: DurationContext;
   steps: RouteStep[];
   trustScore?: {
     score: number;
@@ -87,7 +87,7 @@ class RoutingService {
     optimizeBy: 'price' | 'time' | 'balanced' = 'price',
     limit: number = 1,
     walkingPolicy: WalkingPolicy = DEFAULT_WALKING_POLICY,
-    context?: { at?: Date; useEffectiveDuration?: boolean }   // ← NEW
+    context?: { at?: Date; useEffectiveDuration?: boolean }
   ): Promise<CalculatedRoute[]> {
 
     if (!originStopId || !destinationStopId) {
@@ -97,7 +97,6 @@ class RoutingService {
       throw new Error('Origin and destination cannot be the same stop');
     }
 
-    // ← NEW: resolve duration context
     const at = context?.at ?? new Date();
     const useEffectiveDuration = context?.useEffectiveDuration ?? true;
     const durationContext = getCompositeDurationMultiplier(at);
@@ -119,13 +118,13 @@ class RoutingService {
       const single = await this.dijkstra(
         graph.edges, originStopId, destinationStopId,
         weightKey, voteStatsMap, walkingPolicy,
-        durationContext, useEffectiveDuration                 // ← NEW
+        durationContext, useEffectiveDuration
       );
 
       if (single) {
         const filterResult = filterWalkingHeavy(single.steps, walkingPolicy);
         if (filterResult.passes) {
-          const formatted = await this.formatRoutes([single.steps], optimizeBy, durationContext); // ← NEW arg
+          const formatted = await this.formatRoutes([single.steps], optimizeBy, durationContext);
           return this.addRouteComparison(formatted, optimizeBy);
         }
       }
@@ -136,7 +135,7 @@ class RoutingService {
     const candidates = await this.yenAlgorithm(
       graph.edges, originStopId, destinationStopId,
       weightKey, K, voteStatsMap, walkingPolicy,
-      durationContext, useEffectiveDuration                   // ← NEW
+      durationContext, useEffectiveDuration
     );
 
     const passing = candidates.filter(p =>
@@ -150,7 +149,7 @@ class RoutingService {
     }
 
     const formatted = await this.formatRoutes(
-      passing.slice(0, routeLimit), optimizeBy, durationContext  // ← NEW arg
+      passing.slice(0, routeLimit), optimizeBy, durationContext
     );
     return this.addRouteComparison(formatted, optimizeBy);
   }
@@ -207,8 +206,8 @@ class RoutingService {
     weightKey: WeightKey,
     voteStatsMap: Map<string, { upvotes: number; downvotes: number }>,
     walkingPolicy: WalkingPolicy,
-    durationContext: { multiplier: number; timeOfDayLabel: string },   // ← NEW
-    useEffectiveDuration: boolean                                       // ← NEW
+    durationContext: { multiplier: number; timeOfDayLabel: string },
+    useEffectiveDuration: boolean
   ): Promise<number> {
     const isWalking = edge.transportType === TransportType.walking;
 
@@ -216,13 +215,10 @@ class RoutingService {
     let effectiveDuration = edge.duration;
 
     if (isWalking) {
-      // Walking is not traffic-affected
-      const km = (edge.distanceM ?? 0) / 1000;
-      effectivePrice = walkingPolicy.pricePerKm * km;
+      // Phase 1: walking has no monetary penalty; hard limits do the work.
+      // Phase 3 will remove this branch entirely (new router).
+      effectivePrice = edge.price;   // = 0 for walking
       effectiveDuration = edge.duration * walkingPolicy.timePenalty;
-    } else if (useEffectiveDuration) {
-      // ← NEW: motorized edges get traffic multiplier
-      effectiveDuration = edge.duration * durationContext.multiplier;
     }
 
     let baseWeight: number;
@@ -264,8 +260,8 @@ class RoutingService {
     weightKey: WeightKey,
     voteStatsMap: Map<string, { upvotes: number; downvotes: number }>,
     walkingPolicy: WalkingPolicy,
-    durationContext: { multiplier: number; timeOfDayLabel: string },   // ← NEW
-    useEffectiveDuration: boolean                                       // ← NEW
+    durationContext: { multiplier: number; timeOfDayLabel: string },
+    useEffectiveDuration: boolean
   ): Promise<{ steps: GraphEdge[] } | null> {
     const distances = new Map<string, number>();
     const pathMap = new Map<string, PathEntry>();
@@ -300,7 +296,7 @@ class RoutingService {
         if (!unvisited.has(edge.to)) continue;
         const weight = await this.getWeight(
           edge, weightKey, voteStatsMap, walkingPolicy,
-          durationContext, useEffectiveDuration                 // ← NEW
+          durationContext, useEffectiveDuration
         );
         const alt = (distances.get(current) ?? Infinity) + weight;
         if (alt < (distances.get(edge.to) ?? Infinity)) {
@@ -333,8 +329,8 @@ class RoutingService {
     K: number,
     voteStatsMap: Map<string, { upvotes: number; downvotes: number }>,
     walkingPolicy: WalkingPolicy,
-    durationContext: { multiplier: number; timeOfDayLabel: string },   // ← NEW
-    useEffectiveDuration: boolean                                       // ← NEW
+    durationContext: { multiplier: number; timeOfDayLabel: string },
+    useEffectiveDuration: boolean
   ): Promise<GraphEdge[][]> {
     const workingGraph = this.cloneGraph(graph);
     const A: GraphEdge[][] = [];
@@ -342,7 +338,7 @@ class RoutingService {
 
     const firstPath = await this.dijkstra(
       workingGraph, start, end, weightKey, voteStatsMap, walkingPolicy,
-      durationContext, useEffectiveDuration                            // ← NEW
+      durationContext, useEffectiveDuration
     );
     if (!firstPath) return A;
     A.push(firstPath.steps);
@@ -387,7 +383,7 @@ class RoutingService {
 
         const spurPath = await this.dijkstra(
           workingGraph, spurNode, end, weightKey, voteStatsMap, walkingPolicy,
-          durationContext, useEffectiveDuration                          // ← NEW
+          durationContext, useEffectiveDuration
         );
 
         for (const node of removedNodes) workingGraph.set(node, []);
@@ -410,7 +406,7 @@ class RoutingService {
           if (!isDuplicate) {
             const totalCost = await this.calculatePathCost(
               totalPath, weightKey, voteStatsMap, walkingPolicy,
-              durationContext, useEffectiveDuration                     // ← NEW
+              durationContext, useEffectiveDuration
             );
             B.push({ path: totalPath, cost: totalCost, key: pathKey });
           }
@@ -460,14 +456,14 @@ class RoutingService {
     weightKey: WeightKey,
     voteStatsMap: Map<string, { upvotes: number; downvotes: number }>,
     walkingPolicy: WalkingPolicy,
-    durationContext: { multiplier: number; timeOfDayLabel: string },   // ← NEW
-    useEffectiveDuration: boolean                                       // ← NEW
+    durationContext: { multiplier: number; timeOfDayLabel: string },
+    useEffectiveDuration: boolean
   ): Promise<number> {
     let totalCost = 0;
     for (const edge of path) {
       totalCost += await this.getWeight(
         edge, weightKey, voteStatsMap, walkingPolicy,
-        durationContext, useEffectiveDuration                           // ← NEW
+        durationContext, useEffectiveDuration
       );
     }
     return totalCost;
@@ -476,8 +472,8 @@ class RoutingService {
   // ─── Formatting (Thread B: base vs effective durations) ────────────
   private formatRoute(
     steps: GraphEdge[],
-    durationContext: { multiplier: number; timeOfDayLabel: string },   // ← NEW
-    at: Date,                                                           // ← NEW
+    durationContext: { multiplier: number; timeOfDayLabel: string },
+    at: Date,
     id?: string
   ): CalculatedRoute {
     const totalPrice = steps.reduce((sum, s) => sum + s.price, 0);
@@ -504,8 +500,8 @@ class RoutingService {
         to: s.toName,
         price: s.price,
         duration: effectiveDuration,          // backwards compat
-        baseDuration,                          // ← NEW
-        effectiveDuration,                     // ← NEW
+        baseDuration,
+        effectiveDuration,
         instructions: s.instructions,
         connectionId: s.connectionId,
         stepIndex: index,
@@ -520,9 +516,9 @@ class RoutingService {
       id: id || `route_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       totalPrice,
       totalDuration: totalEffectiveDuration,     // backwards compat
-      totalBaseDuration,                          // ← NEW
-      totalEffectiveDuration,                     // ← NEW
-      durationContext: {                          // ← NEW
+      totalBaseDuration,
+      totalEffectiveDuration,
+      durationContext: {
         at,
         timeOfDayLabel: durationContext.timeOfDayLabel,
         durationMultiplier: durationContext.multiplier,
@@ -534,9 +530,9 @@ class RoutingService {
   private async formatRoutes(
     routes: GraphEdge[][],
     optimizeBy: 'price' | 'time' | 'balanced',
-    durationContext: { multiplier: number; timeOfDayLabel: string }    // ← NEW
+    durationContext: { multiplier: number; timeOfDayLabel: string }
   ): Promise<CalculatedRoute[]> {
-    const at = new Date();   // ← NEW: capture timestamp once for all routes
+    const at = new Date();
     return routes.map((route, index) =>
       this.formatRoute(route, durationContext, at, `route_${index + 1}_${Date.now()}`)
     );
@@ -556,21 +552,21 @@ class RoutingService {
     }
 
     const minPrice = Math.min(...routes.map(r => r.totalPrice));
-    const minDuration = Math.min(...routes.map(r => r.totalEffectiveDuration));  // ← CHANGED
+    const minDuration = Math.min(...routes.map(r => r.totalEffectiveDuration));
     let bestBalanced = routes[0];
     if (optimizeBy === 'balanced') {
       let bestScore = Infinity;
       for (const route of routes) {
         const normalizedPrice = route.totalPrice / 10;
         const score = (normalizedPrice * BALANCED_PRICE_WEIGHT) +
-                      (route.totalEffectiveDuration * BALANCED_DURATION_WEIGHT);  // ← CHANGED
+                      (route.totalEffectiveDuration * BALANCED_DURATION_WEIGHT);
         if (score < bestScore) { bestScore = score; bestBalanced = route; }
       }
     }
 
     return routes.map(route => ({
       ...route,
-      isFastest: route.totalEffectiveDuration === minDuration,  // ← CHANGED
+      isFastest: route.totalEffectiveDuration === minDuration,
       isCheapest: route.totalPrice === minPrice,
       isBestBalanced: optimizeBy === 'balanced' && route === bestBalanced,
     }));
