@@ -11,7 +11,7 @@
 //      (unless origin and destination are the same — handled upstream)
 
 import { TransportType } from '../../generated/prisma';
-import { GraphEdge } from './graph.builder';
+import { GraphEdge } from './routing/graph.builder';
 import { WalkingPolicy } from './walking-policy';
 
 export interface WalkingFilterResult {

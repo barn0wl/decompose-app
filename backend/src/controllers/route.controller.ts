@@ -1,5 +1,7 @@
+// src/controllers/route.controller.ts
+
 import { Request, Response } from 'express';
-import { routingService } from '../services/routing.service';
+import { routingService, NoValidRouteError } from '../services/routing/routing.service';
 import { calculateRouteSchema } from '../validators/route.validator';
 import { ZodError } from 'zod';
 import prisma from '../lib/prisma';
@@ -19,27 +21,19 @@ export async function calculateRoute(req: Request, res: Response) {
       return res.status(404).json({ error: 'Stop not found' });
     }
 
-    const routes = await routingService.calculateRoute(
+    const route = await routingService.calculateRoute(
       validated.originStopId,
       validated.destinationStopId,
-      validated.optimizeBy
-    );
-
-    const routesWithScores = await Promise.all(
-      routes.map(async (route) => {
-        const trustScore = await routingService.computeRouteTrustScore(route);
-        return {
-          ...route,
-          trustScore,
-        };
-      })
+      {
+        at: validated.at ? new Date(validated.at) : undefined,
+        useEffectiveDuration: true,
+      }
     );
 
     res.json({
       origin: { id: originStop.id, name: originStop.name, commune: originStop.commune },
       destination: { id: destinationStop.id, name: destinationStop.name, commune: destinationStop.commune },
-      routes: routesWithScores,
-      optimizedFor: validated.optimizeBy
+      route,
     });
 
   } catch (error: any) {
@@ -48,8 +42,16 @@ export async function calculateRoute(req: Request, res: Response) {
         error: 'Validation failed',
         details: error.issues.map((issue) => ({
           field: issue.path.join('.'),
-          message: issue.message
-        }))
+          message: issue.message,
+        })),
+      });
+    }
+
+    if (error instanceof NoValidRouteError) {
+      return res.status(404).json({
+        error: error.code,
+        message: error.message,
+        hint: error.hint,
       });
     }
 
@@ -69,8 +71,8 @@ export async function searchStops(req: Request, res: Response) {
       where: {
         OR: [
           { name: { contains: q, mode: 'insensitive' } },
-          { commune: { contains: q, mode: 'insensitive' } }
-        ]
+          { commune: { contains: q, mode: 'insensitive' } },
+        ],
       },
       take: 10,
       select: {
@@ -80,7 +82,7 @@ export async function searchStops(req: Request, res: Response) {
         latitude: true,
         longitude: true,
         type: true,
-      }
+      },
     });
 
     return res.json({ stops });
@@ -93,7 +95,7 @@ export async function searchStops(req: Request, res: Response) {
 export async function getAllStops(req: Request, res: Response) {
   try {
     const stops = await prisma.stop.findMany({
-      orderBy: { name: 'asc' }
+      orderBy: { name: 'asc' },
     });
     res.json({ stops });
   } catch (error) {
