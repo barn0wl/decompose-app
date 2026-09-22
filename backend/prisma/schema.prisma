@@ -52,6 +52,9 @@ model Stop {
   connectionsTo   Connection[] @relation("ToStop")
   suggestedFrom   SuggestedConnection[] @relation("SuggestionFrom")
   suggestedTo     SuggestedConnection[] @relation("SuggestionTo")
+
+  segmentsAsFrom  RouteSegment[] @relation("SegmentFrom")
+  segmentsAsTo    RouteSegment[] @relation("SegmentTo")
 }
 
 model Vote {
@@ -118,4 +121,50 @@ model SuggestedConnection {
   approvedAt      DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+}
+
+// ─── ROUTE (new transit model) ────────────────────────────────────────────
+
+model Route {
+  id              String          @id @default(uuid())
+  name            String
+  transportType   TransportType
+
+  // Pricing rule stored as JSON. Shape (typed in code):
+  //   { type: 'flat', price: number }
+  //   { type: 'banded', bands: [{ uptoSequence: number, price: number }] }
+  pricing         Json
+
+  // Total number of stops on the route (used for reverse-direction pricing math)
+  totalStops      Int
+
+  segments        RouteSegment[]
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([transportType])
+}
+
+model RouteSegment {
+  id              String  @id @default(uuid())
+  routeId         String
+  route           Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  fromStopId      String
+  fromStop        Stop    @relation("SegmentFrom", fields: [fromStopId], references: [id])
+
+  toStopId        String
+  toStop          Stop    @relation("SegmentTo", fields: [toStopId], references: [id])
+
+  // 0-indexed position within the route. Segment 0 connects stop[0] → stop[1].
+  sequence        Int
+
+  // Base duration in minutes (before traffic multiplier)
+  durationMinutes Int
+
+  @@unique([routeId, sequence])
+  @@index([fromStopId])
+  @@index([toStopId])
+  @@index([routeId])
 }

@@ -1,25 +1,23 @@
 // prisma/seed.ts
-// Rewritten seeder: anchors first, then GTFS stops (commune-inferred), then routes.
+// Rewritten seeder: anchors → GTFS stops → routes + route segments.
+// Connections are NOT created; the routing layer uses RouteSegments now.
 
 import 'dotenv/config';
-import { PrismaClient, StopType, TransportType, SuggestionStatus } from '../generated/prisma/index';
+
+import { PrismaClient, StopType, TransportType } from '../generated/prisma/index';
 import { PrismaPg } from '@prisma/adapter-pg';
 import {
   ANCHOR_STOPS,
   GTFS_STOPS,
   CURATED_ROUTES,
   CANONICAL_MAP,
-  PRICE_BANDS,
-  TRANSPORT_MULTIPLIERS,
   MAX_ANCHOR_MERGE_DISTANCE_M,
-  type PriceBand,
+  type PricingRule,
 } from './data/curated';
 
-const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error('Neither DIRECT_URL nor DATABASE_URL is set');
-}
-const adapter = new PrismaPg({ connectionString });
+const adapter = new PrismaPg({
+  connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL!,
+});
 const prisma = new PrismaClient({ adapter });
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────
@@ -49,23 +47,17 @@ function nearestAnchor(
   return best;
 }
 
-function inferPrice(distanceM: number, transportType: TransportType): number {
-  const km = distanceM / 1000;
-  const band = PRICE_BANDS.find((b: PriceBand) => km <= b.maxKm) ?? PRICE_BANDS[PRICE_BANDS.length - 1];
-  const mult = TRANSPORT_MULTIPLIERS[transportType] ?? 1.0;
-  const raw = band.price * mult;
-  return Math.round(raw / 25) * 25;
-}
-
 // ─── MAIN ─────────────────────────────────────────────────────────────────
 
 async function main() {
   console.log('🌱 Seeding database...\n');
 
-  // Clean
+  // Clean (order: dependents first)
   await prisma.vote.deleteMany();
   await prisma.suggestedConnection.deleteMany();
   await prisma.connection.deleteMany();
+  await prisma.routeSegment.deleteMany();
+  await prisma.route.deleteMany();
   await prisma.stop.deleteMany();
 
   // ── STEP 1: Insert anchors ──────────────────────────────────────────
@@ -81,8 +73,6 @@ async function main() {
   });
   console.log(`✅ ${anchorRows.length} anchors inserted\n`);
 
-  // Build lookup maps
-  const anchorByName = new Map(anchorRows.map(a => [a.name, a]));
   const anchorList = anchorRows.map(a => ({
     name: a.name,
     commune: a.commune,
@@ -94,10 +84,12 @@ async function main() {
   console.log('📍 Inserting GTFS stops (commune inferred)...');
   let mergedIntoAnchor = 0;
   let insertedFresh = 0;
-  const gtfsStopByName = new Map<string, { id: string; name: string; commune: string; latitude: number; longitude: number }>();
+
+  const gtfsStopByName = new Map<string, {
+    id: string; name: string; commune: string; latitude: number; longitude: number;
+  }>();
 
   for (const gtfsStop of GTFS_STOPS) {
-    // Check if this GTFS stop is close enough to an anchor to be considered the same
     let mergedInto: typeof anchorRows[0] | null = null;
     for (const a of anchorRows) {
       const d = haversineMeters(gtfsStop.latitude, gtfsStop.longitude, a.latitude, a.longitude);
@@ -108,7 +100,6 @@ async function main() {
     }
 
     if (mergedInto) {
-      // Anchor wins; record GTFS name as alias so routes can resolve to it
       gtfsStopByName.set(gtfsStop.canonicalName, {
         id: mergedInto.id,
         name: mergedInto.name,
@@ -120,7 +111,6 @@ async function main() {
       continue;
     }
 
-    // Otherwise infer commune from nearest anchor
     const { commune, distanceM } = nearestAnchor(gtfsStop.latitude, gtfsStop.longitude, anchorList);
     const inferredCommune = distanceM > 5000 ? 'Unknown' : commune;
 
@@ -146,8 +136,10 @@ async function main() {
 
   console.log(`✅ ${insertedFresh} new stops inserted, ${mergedIntoAnchor} merged into anchors\n`);
 
-  // Unified lookup: anchor names + GTFS canonical names
-  const stopByName = new Map<string, { id: string; name: string; commune: string; latitude: number; longitude: number }>();
+  // Unified stop lookup
+  const stopByName = new Map<string, {
+    id: string; name: string; commune: string; latitude: number; longitude: number;
+  }>();
   for (const a of anchorRows) {
     stopByName.set(a.name, {
       id: a.id, name: a.name, commune: a.commune,
@@ -158,25 +150,22 @@ async function main() {
     stopByName.set(name, s);
   }
 
-  // ── STEP 3: Resolve canonical stop names ────────────────────────────
+  // ── STEP 3: Resolve canonical names ─────────────────────────────────
   function resolveStopName(rawName: string): string {
-    // Apply canonical mapping first
-    const mapped = CANONICAL_MAP[rawName] ?? rawName;
-    return mapped;
+    return CANONICAL_MAP[rawName] ?? rawName;
   }
 
-  // ── STEP 4: Build connections from routes ───────────────────────────
-  console.log('📍 Creating connections from curated routes...');
+  // ── STEP 4: Insert routes + segments ────────────────────────────────
+  console.log('📍 Creating routes and segments...');
 
-  const connectionRows: any[] = [];
+  const missingStops: string[] = [];
+  let routesCreated = 0;
+  let segmentsCreated = 0;
   let skippedRoutes = 0;
-  let missingStops: string[] = [];
 
   for (const route of CURATED_ROUTES) {
     // Resolve all stop names
     const resolvedNames = route.stops.map(resolveStopName);
-
-    // Verify all stops exist
     const resolved = resolvedNames.map(n => {
       const s = stopByName.get(n);
       if (!s) missingStops.push(`${route.name}: "${n}"`);
@@ -188,37 +177,60 @@ async function main() {
       continue;
     }
 
-    // Walk consecutive pairs
-    for (let i = 0; i < resolved.length - 1; i++) {
-      const from = resolved[i]!;
-      const to = resolved[i + 1]!;
-      const duration = route.durations[i] ?? 1;
+    // Deduplicate consecutive identical stops (e.g., "Abobo Gare" → "Abobo Gare")
+    // Keep the durations aligned by collapsing them too.
+    const cleanStops: typeof resolved = [];
+    const cleanDurations: number[] = [];
+    for (let i = 0; i < resolved.length; i++) {
+      const s = resolved[i]!;
+      if (cleanStops.length > 0 && cleanStops[cleanStops.length - 1]!.id === s.id) {
+        // Same stop repeated — merge durations
+        if (i < route.durations.length) {
+          cleanDurations[cleanDurations.length - 1] += route.durations[i];
+        }
+        continue;
+      }
+      cleanStops.push(s);
+      if (i < route.durations.length) {
+        cleanDurations.push(route.durations[i]);
+      }
+    }
 
-      // Skip self-loops (e.g., "Abobo Gare" → "Abobo Gare")
-      if (from.id === to.id) continue;
+    if (cleanStops.length < 2) {
+      console.warn(`⚠️ Route "${route.name}" has fewer than 2 unique stops, skipping`);
+      skippedRoutes++;
+      continue;
+    }
 
-      const distanceM = haversineMeters(from.latitude, from.longitude, to.latitude, to.longitude);
-      const price = inferPrice(distanceM, route.transportType);
+    // Insert the Route
+    const createdRoute = await prisma.route.create({
+      data: {
+        name: route.name,
+        transportType: route.transportType,
+        pricing: route.pricing as any,   // Prisma Json type
+        totalStops: cleanStops.length,
+      },
+    });
 
-      // Forward
-      connectionRows.push({
+    // Insert the segments
+    const segmentData = [];
+    for (let i = 0; i < cleanStops.length - 1; i++) {
+      const from = cleanStops[i]!;
+      const to = cleanStops[i + 1]!;
+      const duration = Math.max(1, Math.round(cleanDurations[i] ?? 1));
+
+      segmentData.push({
+        routeId: createdRoute.id,
         fromStopId: from.id,
         toStopId: to.id,
-        transportType: route.transportType,
-        basePrice: price,
-        durationMinutes: Math.max(1, Math.round(duration)),
-        routeDescription: `${route.name}: ${from.name} → ${to.name}`,
-      });
-      // Reverse
-      connectionRows.push({
-        fromStopId: to.id,
-        toStopId: from.id,
-        transportType: route.transportType,
-        basePrice: price,
-        durationMinutes: Math.max(1, Math.round(duration)),
-        routeDescription: `${route.name}: ${to.name} → ${from.name}`,
+        sequence: i,
+        durationMinutes: duration,
       });
     }
+
+    await prisma.routeSegment.createMany({ data: segmentData });
+    routesCreated++;
+    segmentsCreated += segmentData.length;
   }
 
   if (missingStops.length > 0) {
@@ -230,47 +242,29 @@ async function main() {
     console.warn(`⚠️  Skipped ${skippedRoutes} routes due to missing stops\n`);
   }
 
-  // ── STEP 5: Deduplicate connections ─────────────────────────────────
-  // Same (fromStopId, toStopId, transportType) from multiple routes should be one connection.
-  const seen = new Set<string>();
-  const deduped: typeof connectionRows = [];
-  for (const c of connectionRows) {
-    const key = `${c.fromStopId}|${c.toStopId}|${c.transportType}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(c);
-  }
-  console.log(`✅ ${deduped.length} unique connections (${connectionRows.length} before dedup)\n`);
-
-  // ── STEP 6: Batch insert connections ────────────────────────────────
-  console.log('📍 Inserting connections...');
-  // createMany in chunks to avoid parameter limits
-  const CHUNK = 500;
-  for (let i = 0; i < deduped.length; i += CHUNK) {
-    await prisma.connection.createMany({
-      data: deduped.slice(i, i + CHUNK),
-    });
-  }
-  console.log(`✅ ${deduped.length} connections inserted\n`);
-
-  // ── STEP 7: No sample suggestions (dropped intentionally) ───────────
+  console.log(`✅ ${routesCreated} routes created, ${segmentsCreated} segments inserted\n`);
 
   // ── SUMMARY ─────────────────────────────────────────────────────────
   const totalStops = await prisma.stop.count();
-  const totalConnections = await prisma.connection.count();
+  const totalRoutes = await prisma.route.count();
+  const totalSegments = await prisma.routeSegment.count();
 
   console.log('📊 SEED SUMMARY');
   console.log('═'.repeat(40));
   console.log(`✅ Anchors:      ${anchorRows.length}`);
   console.log(`✅ GTFS stops:   ${insertedFresh} new + ${mergedIntoAnchor} merged`);
   console.log(`✅ Total stops:  ${totalStops}`);
-  console.log(`✅ Connections:  ${totalConnections}`);
+  console.log(`✅ Routes:       ${totalRoutes}`);
+  console.log(`✅ Segments:     ${totalSegments}`);
   console.log('═'.repeat(40));
 
-  console.log('\n📋 Stops by commune:');
-  const byCommune = await prisma.stop.groupBy({ by: ['commune'], _count: true, orderBy: { _count: { commune: 'desc' } } });
-  for (const g of byCommune) {
-    console.log(`  - ${g.commune.padEnd(15)} ${g._count}`);
+  console.log('\n📋 Routes by transport type:');
+  const byType = await prisma.route.groupBy({
+    by: ['transportType'],
+    _count: true,
+  });
+  for (const g of byType) {
+    console.log(`  - ${g.transportType.padEnd(15)} ${g._count}`);
   }
 
   console.log('\n🎉 Done!');
