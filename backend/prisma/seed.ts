@@ -13,7 +13,7 @@ import {
   CANONICAL_MAP,
   MAX_ANCHOR_MERGE_DISTANCE_M,
   type PricingRule,
-} from './data/curated';
+} from './data';
 
 const adapter = new PrismaPg({
   connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL!,

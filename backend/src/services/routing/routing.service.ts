@@ -177,6 +177,7 @@ class RoutingService {
       console.log('🔄 Building fresh graph...');
       this.graphCache = await buildGraph();
       this.lastBuildTime = now;
+      this.pricingCache.clear(); // routes/pricing can change between rebuilds too
     } else {
       console.log(`📦 Using cached graph (age ${Math.round((now - this.lastBuildTime) / 1000)}s)`);
     }

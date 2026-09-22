@@ -41,6 +41,20 @@ function getUniqueTransportTypes(legs: Leg[]): TransportType[] {
   return types;
 }
 
+// Translate the backend's English label to French for display
+function translateTimeOfDayLabel(label: string): string {
+  const map: Record<string, string> = {
+    'Night': 'Nuit',
+    'Early morning': 'Petit matin',
+    'Morning rush': 'Heure de pointe',
+    'Midday': 'Midi',
+    'Evening rush': 'Heure de pointe',
+    'Evening': 'Soirée',
+    'Unknown': 'Inconnu',
+  };
+  return map[label] ?? label;
+}
+
 export default function RouteDetailScreen({ navigation, route }: Props) {
   const { route: calculatedRoute, originName, destinationName } = route.params;
   const [selectedLegIndex, setSelectedLegIndex] = useState(0);
@@ -156,6 +170,22 @@ export default function RouteDetailScreen({ navigation, route }: Props) {
                     </Text>
                     <Text style={styles.recapMetaLabel}>
                       Trajet{calculatedRoute.boardingCount > 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Traffic / time-of-day context row */}
+                <View style={styles.trafficRow}>
+                  <View style={styles.trafficChip}>
+                    <Text style={styles.trafficChipLabel}>Trafic</Text>
+                    <Text style={styles.trafficChipValue}>
+                      {translateTimeOfDayLabel(calculatedRoute.durationContext.timeOfDayLabel)}
+                    </Text>
+                  </View>
+                  <View style={styles.trafficChip}>
+                    <Text style={styles.trafficChipLabel}>Facteur</Text>
+                    <Text style={styles.trafficChipValue}>
+                      ×{calculatedRoute.durationContext.durationMultiplier.toFixed(2)}
                     </Text>
                   </View>
                 </View>
@@ -328,6 +358,41 @@ const styles = StyleSheet.create({
     width: 1, height: 28,
     backgroundColor: COLORS.surfaceAlt,
   },
+
+  // Traffic row
+  trafficRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surfaceAlt,
+  },
+  trafficChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.surfaceAlt,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  trafficChipLabel: {
+    fontFamily: FONTS.heading,
+    fontSize: 10,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  trafficChipValue: {
+    fontFamily: FONTS.heading,
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+
   transportChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -373,10 +438,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  // Active leg highlight
   activeLegWrapper: {
-    // Slight visual emphasis on the selected leg
-    // (LegCard already has its own card styles)
+    // selected leg emphasis handled inside LegCard
   },
 
   // Footer

@@ -195,7 +195,7 @@ export async function buildGraph(): Promise<RouteGraph> {
           routeId: route.id,
           routeName: route.name,
           segmentId: seg.id,
-          sequence: totalStops - 2 - seg.sequence,   // reverse ordering
+          sequence: seg.sequence,
           direction: 'backward',
           duration: seg.durationMinutes,
           fromName: from.name,

@@ -14,8 +14,8 @@ export interface WalkingPolicy {
 export const DEFAULT_WALKING_POLICY: WalkingPolicy = {
   timePenalty: 1.15,
   maxStepDistanceM: 500,
-  maxRouteDistanceM: 800,
-  maxSteps: 2,
+  maxRouteDistanceM: 1200,
+  maxSteps: 3,
   maxConsecutiveSteps: 1,
   noWalkingOnlyRoute: true,
 };

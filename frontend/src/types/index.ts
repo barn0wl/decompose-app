@@ -22,6 +22,12 @@ export type RootStackParamList = {
     originName: string;
     destinationName: string;
   };
+  RouteError: {
+    originName: string;
+    destinationName: string;
+    message: string;
+    hint?: string;
+  };
   SuggestConnection: undefined;
   PendingConfirmations: undefined;
 };

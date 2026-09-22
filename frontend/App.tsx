@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import HomeScreen from './src/screens/HomeScreen';
 import RouteDetailScreen from './src/screens/RouteDetailScreen';
+import RouteErrorScreen from './src/screens/RouteErrorScreen';
 import SuggestConnectionScreen from './src/screens/SuggestConnectionScreen';
 import PendingConfirmationsScreen from './src/screens/PendingConfirmationsScreen';
 import { RootStackParamList } from './src/types';
@@ -29,6 +30,7 @@ export default function App() {
           >
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="RouteDetail" component={RouteDetailScreen} />
+            <Stack.Screen name="RouteError" component={RouteErrorScreen} />
             <Stack.Screen name="SuggestConnection" component={SuggestConnectionScreen} />
             <Stack.Screen name="PendingConfirmations" component={PendingConfirmationsScreen} />
           </Stack.Navigator>
