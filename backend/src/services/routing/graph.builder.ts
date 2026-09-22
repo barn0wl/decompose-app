@@ -146,8 +146,6 @@ export async function buildGraph(): Promise<RouteGraph> {
         continue;
       }
 
-      const totalStops = route.totalStops;
-
       // Forward direction: segment i connects stop[i] → stop[i+1]
       for (const seg of route.segments) {
         const from = stopById.get(seg.fromStopId);
@@ -179,8 +177,19 @@ export async function buildGraph(): Promise<RouteGraph> {
         segmentsAdded++;
       }
 
-      // Backward direction: segment i connects stop[i+1] → stop[i]
-      // Sequence is inverted: the last segment becomes sequence 0 in reverse.
+      // Backward direction: segment i connects stop[i+1] → stop[i].
+      //
+      // IMPORTANT: `sequence` is kept as the segment's ORIGINAL forward
+      // sequence number here, unmodified. Previously this was remapped to
+      // `totalStops - 2 - seg.sequence`, which actually inverted the
+      // traversal order: walking a route backward from its last stop to its
+      // first hits these edges in *increasing* remapped-sequence order, not
+      // decreasing — the opposite of what contiguity checks (in coalescer.ts
+      // and in routing.service.ts's Dijkstra) assume for `direction ===
+      // 'backward'`. That mismatch silently broke leg-coalescing (and now
+      // also marginal-price computation) for every reverse-direction ride.
+      // Keeping the original sequence number means "contiguous" for a
+      // backward edge is correctly "next sequence is exactly one lower."
       for (const seg of route.segments) {
         const from = stopById.get(seg.toStopId);
         const to = stopById.get(seg.fromStopId);
